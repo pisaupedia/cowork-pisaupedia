@@ -1,0 +1,50 @@
+@import "tailwindcss";
+
+:root {
+  --background: #f7f8fa;
+  --foreground: #1c1f26;
+  --brand-blue: oklch(0.52 0.14 255);
+  --brand-blue-dark: oklch(0.32 0.03 255);
+  --brand-red: oklch(0.4 0.2 15);
+  --brand-red-dark: oklch(0.33 0.2 15);
+  --status-aman-bg: oklch(0.94 0.045 142);
+  --status-aman-fg: oklch(0.36 0.09 142);
+  --status-mendekati-bg: oklch(0.94 0.06 80);
+  --status-mendekati-fg: oklch(0.42 0.1 65);
+  --status-terlambat-bg: oklch(0.94 0.06 25);
+  --status-terlambat-fg: oklch(0.42 0.14 25);
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+
+/* Stand-in for the mockup's Oswald headings: a condensed, bold system stack
+   (no external font fetch needed, so it works offline / behind firewalls). */
+.font-heading {
+  font-family: "Arial Narrow", "Helvetica Neue Condensed", ui-sans-serif, system-ui, sans-serif;
+  font-weight: 700;
+  letter-spacing: 0.2px;
+}
+
+/* Cetak dokumen niaga (modul Invoice & Dokumen): sembunyikan sidebar/topbar
+   dan semua kontrol non-cetak (tombol, nav) supaya hasil print/PDF hanya
+   berisi lembar dokumen itu sendiri. */
+@media print {
+  aside {
+    display: none !important;
+  }
+  main {
+    padding: 0 !important;
+  }
+  .no-print {
+    display: none !important;
+  }
+}

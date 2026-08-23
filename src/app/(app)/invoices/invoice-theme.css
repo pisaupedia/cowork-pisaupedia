@@ -1,0 +1,721 @@
+/*
+ * Tema visual modul "Invoice & Dokumen" — sengaja DIPISAH dari tema utama
+ * aplikasi (globals.css pakai --brand-blue/--brand-red). Atas permintaan
+ * pengguna, panel ini dikembalikan ke tampilan & bahasa (Inggris) aplikasi
+ * invoice standalone yang lama (sebelum digabung ke sistem ini) — hanya
+ * tampilan & bahasa yang dikembalikan; login, database, dan gate
+ * admin-only tetap seperti aplikasi yang sudah terintegrasi.
+ *
+ * Palet warna & class di bawah diambil apa adanya dari file HTML standalone
+ * aslinya (diberi prefix "iv-" supaya tidak bertumbukan dengan class Tailwind
+ * / class aplikasi utama), lalu dipakai ulang oleh halaman-halaman di bawah
+ * src/app/(app)/invoices/* dan src/components/invoice/*.
+ */
+
+.iv-root {
+  --iv-ink: #1a1d23;
+  --iv-muted: #6b7280;
+  --iv-line: #e2e5ea;
+  --iv-accent: #2f6f4f; /* invoice */
+  --iv-accent-light: #eaf3ee;
+  --iv-bg: #f5f6f8;
+  --iv-card: #ffffff;
+  --iv-danger: #c0392b;
+  --iv-sj-accent: #8a5a1f; /* delivery note */
+  --iv-sj-light: #f6efe4;
+  --iv-quo-accent: #3d5fa3; /* quotation */
+  --iv-quo-light: #eaeffb;
+
+  background: var(--iv-bg);
+  color: var(--iv-ink);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  border-radius: 14px;
+  padding: 20px;
+}
+
+.iv-root h1 {
+  font-size: 20px;
+  margin: 0 0 4px;
+  font-family: inherit;
+}
+.iv-subtitle {
+  color: var(--iv-muted);
+  font-size: 13px;
+  margin-bottom: 4px;
+}
+
+/* ---------- type-switch tabs (list filter / new-document type picker) ---------- */
+.iv-tabs {
+  display: flex;
+  gap: 6px;
+  border-bottom: 1px solid var(--iv-line);
+}
+.iv-tab-btn {
+  border: none;
+  background: transparent;
+  padding: 10px 18px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--iv-muted);
+  cursor: pointer;
+  border-bottom: 2.5px solid transparent;
+  margin-bottom: -1px;
+  text-decoration: none;
+  display: inline-block;
+}
+.iv-tab-btn.active {
+  color: var(--iv-accent);
+  border-bottom-color: var(--iv-accent);
+}
+.iv-tab-btn.active.sj {
+  color: var(--iv-sj-accent);
+  border-bottom-color: var(--iv-sj-accent);
+}
+.iv-tab-btn.active.quo {
+  color: var(--iv-quo-accent);
+  border-bottom-color: var(--iv-quo-accent);
+}
+
+/* ---------- toolbar / buttons ---------- */
+.iv-toolbar {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+.iv-btn {
+  border: 1px solid var(--iv-line);
+  background: var(--iv-card);
+  color: var(--iv-ink);
+  padding: 9px 16px;
+  border-radius: 8px;
+  font-size: 13px;
+  cursor: pointer;
+  font-weight: 600;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.iv-btn:hover {
+  filter: brightness(0.97);
+}
+.iv-btn.primary {
+  background: var(--iv-accent);
+  color: #fff;
+  border-color: var(--iv-accent);
+}
+.iv-btn.primary.sj {
+  background: var(--iv-sj-accent);
+  border-color: var(--iv-sj-accent);
+}
+.iv-btn.primary.quo {
+  background: var(--iv-quo-accent);
+  border-color: var(--iv-quo-accent);
+}
+.iv-btn.danger-outline {
+  color: var(--iv-danger);
+  border-color: #f1d4d0;
+}
+.iv-search {
+  border: 1px solid var(--iv-line);
+  border-radius: 8px;
+  padding: 9px 12px;
+  font-size: 13px;
+  min-width: 220px;
+  font-family: inherit;
+  background: var(--iv-card);
+  color: var(--iv-ink);
+}
+.iv-filter-pill {
+  border-radius: 999px;
+  padding: 6px 14px;
+  font-size: 12px;
+  font-weight: 600;
+  background: #eef0f3;
+  color: var(--iv-muted);
+  text-decoration: none;
+  display: inline-block;
+}
+.iv-filter-pill.active {
+  background: var(--iv-accent);
+  color: #fff;
+}
+
+/* ---------- sheet (the printable document) ---------- */
+.iv-sheet {
+  background: var(--iv-card);
+  border: 1px solid var(--iv-line);
+  border-radius: 12px;
+  padding: 36px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+.iv-top-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 24px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+.iv-brand {
+  display: flex;
+  gap: 14px;
+  align-items: flex-start;
+  flex: 1 1 320px;
+  min-width: 0;
+}
+.iv-logo-box {
+  width: 64px;
+  height: 64px;
+  border-radius: 10px;
+  overflow: hidden;
+  flex-shrink: 0;
+  background: #fafafa;
+  border: 1.5px solid var(--iv-line);
+}
+.iv-logo-box img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+}
+.iv-company-name {
+  font-size: 18px;
+  font-weight: 700;
+  margin: 0 0 2px;
+}
+.iv-company-line {
+  font-size: 13px;
+  color: var(--iv-muted);
+  line-height: 1.5;
+}
+.iv-meta-block {
+  min-width: 220px;
+  text-align: right;
+}
+.iv-doc-title {
+  font-size: 26px;
+  letter-spacing: 0.06em;
+  margin: 0 0 10px;
+  text-align: right;
+  font-weight: 700;
+}
+.iv-doc-title.invoice {
+  color: var(--iv-accent);
+}
+.iv-doc-title.sj {
+  color: var(--iv-sj-accent);
+}
+.iv-doc-title.quo {
+  color: var(--iv-quo-accent);
+}
+.iv-meta-field {
+  margin-bottom: 4px;
+}
+.iv-meta-field label {
+  display: block;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--iv-muted);
+  margin-bottom: 2px;
+}
+.iv-meta-field input {
+  border: none;
+  border-bottom: 1px solid transparent;
+  background: transparent;
+  font-size: 14px;
+  color: var(--iv-ink);
+  width: 100%;
+  padding: 2px 0;
+  font-family: inherit;
+  text-align: right;
+}
+.iv-meta-field input:focus {
+  outline: none;
+  border-bottom-color: var(--iv-accent);
+}
+.iv-meta-static {
+  font-size: 14px;
+  padding: 2px 0;
+}
+
+.iv-parties {
+  display: flex;
+  gap: 40px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+.iv-party {
+  flex: 1;
+  min-width: 220px;
+}
+.iv-party.right {
+  text-align: right;
+}
+.iv-party h3 {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--iv-muted);
+  margin: 0 0 5px;
+}
+.iv-field {
+  margin-bottom: 4px;
+}
+.iv-field label {
+  display: block;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--iv-muted);
+  margin-bottom: 2px;
+}
+.iv-field input,
+.iv-field textarea,
+.iv-field select {
+  border: 1px solid var(--iv-line);
+  border-radius: 6px;
+  background: var(--iv-card);
+  font-size: 14px;
+  color: var(--iv-ink);
+  width: 100%;
+  padding: 6px 8px;
+  font-family: inherit;
+}
+.iv-field input:focus,
+.iv-field textarea:focus,
+.iv-field select:focus {
+  outline: none;
+  border-color: var(--iv-accent);
+}
+.iv-party.right .iv-field input,
+.iv-party.right .iv-field select {
+  text-align: right;
+}
+
+/* ---------- item table ---------- */
+.iv-table-scroll {
+  overflow-x: auto;
+}
+.iv-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: 8px;
+  min-width: 560px;
+}
+.iv-table thead th {
+  text-align: left;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--iv-muted);
+  border-bottom: 1.5px solid var(--iv-line);
+  padding: 8px 6px;
+  font-weight: 600;
+}
+.iv-table thead th.num {
+  text-align: right;
+}
+.iv-table tbody td {
+  padding: 8px 6px;
+  border-bottom: 1px solid var(--iv-line);
+  vertical-align: top;
+}
+.iv-table tbody td.num {
+  text-align: right;
+}
+.iv-table tbody input {
+  border: 1px solid var(--iv-line);
+  border-radius: 5px;
+  background: var(--iv-card);
+  width: 100%;
+  font-size: 13px;
+  padding: 5px 6px;
+  font-family: inherit;
+  color: var(--iv-ink);
+}
+.iv-table tbody input:focus {
+  outline: none;
+  border-color: var(--iv-accent);
+}
+.iv-table tbody input.num {
+  text-align: right;
+}
+.iv-row-del {
+  background: none;
+  border: none;
+  color: var(--iv-danger);
+  cursor: pointer;
+  font-size: 16px;
+  padding: 2px 6px;
+}
+.iv-add-row-btn {
+  margin-top: 6px;
+}
+
+.iv-totals {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 12px;
+}
+.iv-totals-inner {
+  width: 320px;
+}
+.iv-totals-line {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 0;
+  font-size: 14px;
+  gap: 8px;
+}
+.iv-totals-line.grand {
+  border-top: 1.5px solid var(--iv-ink);
+  margin-top: 6px;
+  padding-top: 10px;
+  font-size: 17px;
+  font-weight: 700;
+}
+.iv-totals-line label {
+  color: var(--iv-muted);
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.iv-totals-line input[type="number"] {
+  width: 56px;
+  border: 1px solid var(--iv-line);
+  border-radius: 5px;
+  padding: 2px 4px;
+  font-size: 12px;
+  text-align: right;
+  font-family: inherit;
+}
+
+/* ---------- footer fields (notes / payment info / terms) ---------- */
+.iv-footer-fields {
+  display: flex;
+  gap: 32px;
+  margin-top: 20px;
+  flex-wrap: wrap;
+}
+.iv-footer-fields > div {
+  flex: 1;
+  min-width: 220px;
+}
+.iv-footer-fields h3 {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--iv-muted);
+  margin: 0 0 6px;
+}
+.iv-footer-fields textarea {
+  resize: vertical;
+  min-height: 52px;
+  border: 1px solid var(--iv-line);
+  border-radius: 6px;
+  padding: 8px;
+  font-size: 13px;
+  width: 100%;
+  font-family: inherit;
+  color: var(--iv-ink);
+}
+.iv-footer-fields textarea:focus {
+  outline: none;
+  border-color: var(--iv-accent);
+}
+
+/* ---------- signature row ---------- */
+.iv-sig-row {
+  display: flex;
+  gap: 40px;
+  margin-top: 28px;
+  flex-wrap: wrap;
+}
+.iv-sig-box {
+  flex: 1;
+  min-width: 220px;
+  text-align: center;
+}
+.iv-sig-box .iv-sig-space {
+  height: 56px;
+}
+.iv-sig-box .iv-sig-line {
+  border-top: 1px solid var(--iv-ink);
+  padding-top: 6px;
+}
+.iv-sig-box input {
+  border: none;
+  background: transparent;
+  text-align: center;
+  font-size: 13px;
+  width: 100%;
+  font-family: inherit;
+  color: var(--iv-ink);
+}
+.iv-sig-box input:focus {
+  outline: none;
+}
+.iv-sig-caption {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--iv-muted);
+  margin-bottom: 2px;
+}
+
+/* ---------- social follow footer ---------- */
+.iv-social-follow {
+  margin-top: 20px;
+  padding-top: 12px;
+  border-top: 1px solid var(--iv-line);
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.iv-social-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--iv-muted);
+  font-weight: 600;
+}
+.iv-social-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--iv-ink);
+}
+.iv-social-icon {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+}
+.iv-social-icon svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+/* ---------- database (list) view ---------- */
+.iv-db-stats {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.iv-db-stat {
+  background: var(--iv-card);
+  border: 1px solid var(--iv-line);
+  border-radius: 10px;
+  padding: 12px 18px;
+  min-width: 150px;
+}
+.iv-db-stat .n {
+  font-size: 20px;
+  font-weight: 700;
+}
+.iv-db-stat .l {
+  font-size: 11px;
+  color: var(--iv-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.iv-db-table-wrap {
+  background: var(--iv-card);
+  border: 1px solid var(--iv-line);
+  border-radius: 12px;
+  overflow: hidden;
+}
+.iv-db-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 0;
+}
+.iv-db-table thead th {
+  background: #fafbfc;
+  padding: 12px 14px;
+  text-align: left;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--iv-muted);
+  border-bottom: 1.5px solid var(--iv-line);
+  font-weight: 600;
+}
+.iv-db-table thead th.num {
+  text-align: right;
+}
+.iv-db-table tbody td {
+  padding: 12px 14px;
+  font-size: 13px;
+  vertical-align: middle;
+  border-bottom: 1px solid var(--iv-line);
+}
+.iv-db-table tbody td.num {
+  text-align: right;
+}
+.iv-db-table tbody tr:last-child td {
+  border-bottom: none;
+}
+.iv-db-table tbody tr:hover {
+  background: #fafbfc;
+}
+.iv-badge {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+.iv-badge.invoice {
+  background: var(--iv-accent-light);
+  color: var(--iv-accent);
+}
+.iv-badge.sj {
+  background: var(--iv-sj-light);
+  color: var(--iv-sj-accent);
+}
+.iv-badge.quo {
+  background: var(--iv-quo-light);
+  color: var(--iv-quo-accent);
+}
+.iv-row-actions {
+  display: flex;
+  gap: 12px;
+}
+.iv-row-actions button,
+.iv-row-actions a {
+  font-size: 12px;
+  font-weight: 600;
+  text-decoration: none;
+  border: none;
+  background: none;
+  cursor: pointer;
+  padding: 0;
+}
+.iv-link {
+  color: var(--iv-accent);
+}
+.iv-link.danger {
+  color: var(--iv-danger);
+}
+.iv-empty-db {
+  padding: 40px;
+  text-align: center;
+  color: var(--iv-muted);
+  font-size: 13px;
+}
+
+/* ---------- print ---------- */
+@media print {
+  .iv-root {
+    background: #fff;
+    padding: 0;
+    margin: 0;
+  }
+  .iv-sheet {
+    border: none;
+    box-shadow: none;
+    padding: 0;
+    border-radius: 0;
+  }
+  .no-print {
+    display: none !important;
+  }
+}
+
+/* ---------- mobile ---------- */
+@media screen and (max-width: 720px) {
+  .iv-root {
+    padding: 12px;
+  }
+  .iv-tabs {
+    gap: 2px;
+  }
+  .iv-tab-btn {
+    flex: 1;
+    text-align: center;
+    padding: 10px 4px;
+    font-size: 12.5px;
+  }
+  .iv-toolbar {
+    gap: 8px;
+  }
+  .iv-sheet {
+    padding: 16px;
+    border-radius: 10px;
+  }
+  .iv-top-row {
+    gap: 18px;
+    margin-bottom: 12px;
+  }
+  .iv-brand {
+    flex: 1 1 100%;
+  }
+  .iv-meta-block {
+    min-width: 100%;
+    text-align: left;
+  }
+  .iv-meta-block .iv-meta-field,
+  .iv-meta-block .iv-meta-field input {
+    text-align: left;
+  }
+  .iv-doc-title {
+    text-align: left;
+    font-size: 21px;
+    margin-top: 10px;
+  }
+  .iv-parties {
+    gap: 18px;
+    margin-bottom: 12px;
+  }
+  .iv-party {
+    min-width: 100%;
+  }
+  .iv-party.right {
+    text-align: left;
+  }
+  .iv-party.right .iv-field input,
+  .iv-party.right .iv-field select {
+    text-align: left;
+  }
+  .iv-totals {
+    justify-content: stretch;
+  }
+  .iv-totals-inner {
+    width: 100%;
+  }
+  .iv-footer-fields {
+    gap: 16px;
+    margin-top: 20px;
+  }
+  .iv-footer-fields > div {
+    min-width: 100%;
+  }
+  .iv-sig-row {
+    gap: 14px;
+    margin-top: 24px;
+  }
+  .iv-sig-box {
+    min-width: 44%;
+  }
+  .iv-db-stats {
+    gap: 10px;
+  }
+  .iv-db-stat {
+    min-width: 44%;
+    padding: 10px 14px;
+  }
+  .iv-db-table-wrap {
+    overflow-x: auto;
+  }
+  .iv-db-table {
+    min-width: 640px;
+  }
+}

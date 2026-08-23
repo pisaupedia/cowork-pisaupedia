@@ -1,0 +1,109 @@
+import Link from 'next/link';
+import { redirect } from 'next/navigation';
+import { requireUser } from '@/lib/session';
+import { buildVendorArchiveStats, buildArchivedOrdersList } from '@/lib/view';
+import { unarchiveOrderAction } from './actions';
+
+export default async function ArsipPage() {
+  const user = await requireUser();
+  if (user.role !== 'ADMIN') redirect('/dashboard');
+
+  const vendorStats = buildVendorArchiveStats();
+  const archived = buildArchivedOrdersList();
+
+  return (
+    <div className="flex max-w-3xl flex-col gap-6">
+      <div>
+        <h1 className="font-heading text-xl font-semibold">Arsip Pekerjaan Selesai</h1>
+        <p className="text-sm text-black/55">
+          Pesanan yang sudah selesai penuh dan sudah diarsipkan admin dari papan Kanban (kolom &quot;Selesai
+          Produksi&quot;) — datanya tidak dihapus, hanya disembunyikan dari dashboard/kanban/kalender supaya tidak
+          menumpuk.
+        </p>
+      </div>
+
+      <div className="flex flex-col gap-3 rounded-xl border border-black/10 bg-white p-5">
+        <div>
+          <h2 className="font-heading text-sm font-semibold">Statistik Pembayaran Vendor</h2>
+          <p className="text-xs text-black/55">
+            Dihitung HANYA dari pesanan yang sudah diarsipkan di bawah — bukan dari seluruh pesanan yang pernah ada.
+          </p>
+        </div>
+        {vendorStats.length === 0 ? (
+          <p className="text-xs italic text-black/45">Belum ada vendor eksternal.</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[520px] text-left text-sm">
+              <thead>
+                <tr className="border-b border-black/10 text-xs text-black/50">
+                  <th className="py-2 pr-3 font-medium">Vendor</th>
+                  <th className="py-2 pr-3 font-medium">Jumlah Pesanan</th>
+                  <th className="py-2 pr-3 font-medium">Sudah Dibayar</th>
+                  <th className="py-2 pr-3 font-medium">Belum Dibayar</th>
+                </tr>
+              </thead>
+              <tbody>
+                {vendorStats.map((v) => (
+                  <tr key={v.vendorId} className="border-b border-black/5">
+                    <td className="py-2 pr-3 font-medium">{v.vendorNama}</td>
+                    <td className="py-2 pr-3 tabular-nums">{v.jumlahPesanan}</td>
+                    <td className="py-2 pr-3 tabular-nums">{v.totalSudahDibayarLabel}</td>
+                    <td className="py-2 pr-3 tabular-nums text-black/55">{v.totalBelumDibayarLabel}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      <div className="flex flex-col gap-3 rounded-xl border border-black/10 bg-white p-5">
+        <h2 className="font-heading text-sm font-semibold">Pesanan yang Diarsipkan ({archived.length})</h2>
+        {archived.length === 0 ? (
+          <p className="text-xs italic text-black/45">
+            Belum ada pesanan yang diarsipkan. Arsipkan pesanan yang sudah selesai penuh lewat tombol
+            &quot;🗄 Arsipkan&quot; di halaman{' '}
+            <Link href="/kanban" className="font-medium text-[var(--brand-blue)]">
+              Papan Kanban
+            </Link>
+            , kolom &quot;Selesai Produksi&quot;.
+          </p>
+        ) : (
+          <div className="flex flex-col gap-2">
+            {archived.map((o) => (
+              <div
+                key={o.id}
+                className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-black/10 px-3 py-2.5"
+              >
+                <div>
+                  <div className="text-sm font-semibold">{o.kode}</div>
+                  <div className="text-xs text-black/55">
+                    {o.jenis} · {o.pelanggan} · {o.jumlah} unit
+                  </div>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-[11px] text-black/45">Diarsipkan: {o.archivedAtLabel}</span>
+                  <Link
+                    href={`/orders/${o.id}`}
+                    className="rounded-md border border-black/15 px-2.5 py-1 text-xs font-semibold hover:border-[var(--brand-blue)]"
+                  >
+                    Lihat Detail
+                  </Link>
+                  <form action={unarchiveOrderAction}>
+                    <input type="hidden" name="orderId" value={o.id} />
+                    <button
+                      type="submit"
+                      className="rounded-md border border-black/15 px-2.5 py-1 text-xs font-semibold text-black/60 hover:border-[var(--brand-red)] hover:text-[var(--brand-red)]"
+                    >
+                      Batalkan Arsip
+                    </button>
+                  </form>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
