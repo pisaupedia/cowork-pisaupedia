@@ -108,29 +108,25 @@ export default async function DocumentDetailPage({ params }: { params: Promise<{
               </div>
             </div>
           </div>
-        ) : (
-          <div className="iv-parties">
-            <div className="iv-party">
-              <h3>{type === 'quotation' ? 'Quote To' : 'Bill To'}</h3>
-              <div className="iv-field">
-                <input name="clientName" placeholder="Client / Company Name" defaultValue={doc.client_name ?? ''} />
-              </div>
-              <div className="iv-field">
-                <textarea name="clientAddress" rows={2} placeholder="Client address" defaultValue={doc.client_address ?? ''} />
-              </div>
-              <div className="iv-field">
-                <input name="clientContact" placeholder="Client phone / email" defaultValue={doc.client_contact ?? ''} />
-              </div>
-            </div>
-          </div>
-        )}
+        ) : null}
 
         <div>
-          <h2 className="mb-2 font-heading text-sm font-semibold no-print" style={{ color: 'var(--iv-ink)' }}>
-            Items
-          </h2>
           <DocumentEditor
             type={type}
+            billTo={
+              <div className="iv-party">
+                <h3>{type === 'quotation' ? 'Quote To' : 'Bill To'}</h3>
+                <div className="iv-field">
+                  <input name="clientName" placeholder="Client / Company Name" defaultValue={doc.client_name ?? ''} />
+                </div>
+                <div className="iv-field">
+                  <textarea name="clientAddress" rows={2} placeholder="Client address" defaultValue={doc.client_address ?? ''} />
+                </div>
+                <div className="iv-field">
+                  <input name="clientContact" placeholder="Client phone / email" defaultValue={doc.client_contact ?? ''} />
+                </div>
+              </div>
+            }
             initialCurrency={doc.currency}
             initialOverallDiscountPercent={doc.overall_discount_percent}
             initialTaxEnabled={doc.tax_enabled === 1}

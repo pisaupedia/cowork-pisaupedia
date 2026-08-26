@@ -44,6 +44,10 @@ export interface OrderRow {
   is_custom: number;
   approval_status: ApprovalStatus;
   approval_note: string | null;
+  /** Catatan/rincian pekerjaan umum (opsional), beda dari approval_note. */
+  catatan: string | null;
+  /** Alasan penolakan (diisi saat approval_status diset ke 'DITOLAK'). */
+  reject_reason: string | null;
   archived: number;
   archived_at: string | null;
   created_at: string;
@@ -57,6 +61,9 @@ export interface StageRow {
   vendor_id: string | null;
   status: StageStatus;
   honor_jumlah: number;
+  /** Nominal yang sudah dibayarkan ke vendor untuk tahap ini — bisa dicicil/DP,
+   * lihat recordHonorPayment di src/lib/repo/stages.ts. */
+  honor_dibayar: number;
   honor_status: PaymentStatus;
   honor_tanggal_bayar: string | null;
   material_cost: number;
@@ -72,6 +79,18 @@ export interface NoteRow {
   stage_id: string;
   penulis: string;
   teks: string;
+  created_at: string;
+}
+
+/** Satu baris riwayat pembayaran honor (lihat recordHonorPayment di
+ * src/lib/repo/stages.ts) — bisa lebih dari satu per tahap, misalnya DP
+ * lalu pelunasan sisanya. */
+export interface HonorPaymentRow {
+  id: string;
+  stage_id: string;
+  jumlah: number;
+  catatan: string | null;
+  oleh: string;
   created_at: string;
 }
 
@@ -121,9 +140,22 @@ export interface DocumentRow {
   sender_name: string | null;
   driver_sign: string | null;
   receiver_name: string | null;
+  /** Tautan opsional ke pesanan produksi asal — lihat catatan di schema.sql. */
+  order_id: string | null;
   created_by: string;
   created_at: string;
   updated_at: string;
+}
+
+/** Satu baris jejak audit — lihat catatan di schema.sql tabel `audit_log`. */
+export interface AuditLogRow {
+  id: string;
+  entity_type: string;
+  entity_id: string;
+  action: string;
+  detail: string | null;
+  oleh: string;
+  created_at: string;
 }
 
 export interface DocumentItemRow {

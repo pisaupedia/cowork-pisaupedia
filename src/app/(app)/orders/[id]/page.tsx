@@ -3,13 +3,18 @@ import { notFound } from 'next/navigation';
 import { requireUser } from '@/lib/session';
 import { buildOrderDetail } from '@/lib/view';
 import { formatTanggal } from '@/lib/derive';
+import { listVendors } from '@/lib/repo/vendors';
+import { SubmitButton } from '@/components/submit-button';
+import { FlashFromQuery } from '@/components/flash-from-query';
+import { FileDropzoneInput } from '@/components/file-dropzone-input';
 import {
   uploadAttachmentAction,
   markCompleteAction,
-  markPaidAction,
+  recordHonorPaymentAction,
   addNoteAction,
   updateStageCostAction,
   addDesignPhotosAction,
+  reassignVendorAction,
 } from './actions';
 
 const TABS = [
@@ -18,27 +23,61 @@ const TABS = [
   { key: 'lampiran', label: 'Lampiran' },
 ] as const;
 
+const BACK_TARGETS: Record<string, { href: string; label: string }> = {
+  dashboard: { href: '/dashboard', label: 'Dashboard' },
+  kanban: { href: '/kanban', label: 'Papan Kanban' },
+  kalender: { href: '/kalender', label: 'Kalender' },
+  arsip: { href: '/arsip', label: 'Arsip' },
+  approval: { href: '/approval', label: 'Persetujuan' },
+};
+
 export default async function OrderDetailPage({
   params,
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ tab?: string }>;
+  searchParams: Promise<{ tab?: string; from?: string; flash?: string }>;
 }) {
   const user = await requireUser();
   const { id } = await params;
-  const { tab } = await searchParams;
+  const { tab, from, flash } = await searchParams;
 
   const detail = buildOrderDetail(id, user);
   if (!detail) notFound();
 
   const activeTab = tab === 'riwayat' || tab === 'lampiran' || tab === 'laporan' ? tab : 'ringkasan';
+  // Tombol "Kembali" mengarah ke halaman asal navigasi (dashboard/kanban/
+  // kalender/arsip/approval) lewat query `?from=`, bukan selalu ke Dashboard
+  // — lihat BACK_TARGETS di atas & pemakaian `from` di halaman-halaman lain
+  // (order-card.tsx, arsip/page.tsx, approval/page.tsx).
+  const back = (from && BACK_TARGETS[from]) || BACK_TARGETS.dashboard;
+  const isAdmin = user.role === 'ADMIN';
+  const vendors = isAdmin ? listVendors() : [];
 
   return (
     <div className="flex max-w-3xl flex-col gap-4">
-      <Link href="/dashboard" className="flex w-fit items-center gap-1 text-sm font-semibold text-black/55">
-        &larr; Kembali
-      </Link>
+      <FlashFromQuery message={flash ?? null} />
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <Link href={back.href} className="flex w-fit items-center gap-1 text-sm font-semibold text-black/60">
+          &larr; Kembali ke {back.label}
+        </Link>
+        {isAdmin ? (
+          <div className="flex flex-wrap gap-2">
+            <Link
+              href={`/orders/${id}/edit`}
+              className="rounded-md border border-black/15 px-3 py-1.5 text-xs font-semibold text-black/70 hover:border-[var(--brand-blue)] hover:text-[var(--brand-blue)]"
+            >
+              ✎ Edit Pesanan
+            </Link>
+            <Link
+              href={`/invoices/new?type=invoice&orderId=${id}`}
+              className="rounded-md border border-black/15 px-3 py-1.5 text-xs font-semibold text-black/70 hover:border-[var(--brand-blue)] hover:text-[var(--brand-blue)]"
+            >
+              🧾 Buat Invoice dari Pesanan Ini
+            </Link>
+          </div>
+        ) : null}
+      </div>
 
       <div className="flex flex-col gap-4 rounded-2xl border border-black/10 bg-white p-5">
         <div className="flex flex-wrap items-start justify-between gap-2">
@@ -53,6 +92,24 @@ export default async function OrderDetailPage({
           </span>
         </div>
 
+        {detail.order.approval_status === 'MENUNGGU' ? (
+          <div className="rounded-lg bg-[oklch(0.96_0.03_65)] px-3.5 py-2.5 text-sm text-[oklch(0.4_0.09_65)]">
+            Pesanan ini masih menunggu approval admin/sales — belum masuk ke alur produksi.
+          </div>
+        ) : null}
+        {detail.order.approval_status === 'DITOLAK' ? (
+          <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-[var(--status-terlambat-bg)] px-3.5 py-2.5 text-sm text-[var(--status-terlambat-fg)]">
+            <span>
+              Pesanan ini ditolak{detail.order.reject_reason ? `: ${detail.order.reject_reason}` : '.'}
+            </span>
+            {isAdmin ? (
+              <Link href={`/orders/${id}/edit`} className="flex-shrink-0 font-semibold underline">
+                Revisi &amp; ajukan ulang &rarr;
+              </Link>
+            ) : null}
+          </div>
+        ) : null}
+
         <div className="h-2 overflow-hidden rounded-full bg-black/[0.06]">
           <div className="h-full rounded-full bg-[var(--brand-blue)]" style={{ width: `${detail.progress}%` }} />
         </div>
@@ -66,7 +123,7 @@ export default async function OrderDetailPage({
             </p>
           </div>
           {detail.designPhotos.length === 0 ? (
-            <p className="text-xs italic text-black/45">Belum ada foto desain diunggah.</p>
+            <p className="text-xs italic text-black/55">Belum ada foto desain diunggah.</p>
           ) : (
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4">
               {detail.designPhotos.map((p) => (
@@ -82,7 +139,7 @@ export default async function OrderDetailPage({
                     alt={p.nama}
                     className="aspect-square w-full object-cover transition group-hover:opacity-90"
                   />
-                  <div className="px-2 pb-1.5 text-[10px] text-black/45">
+                  <div className="px-2 pb-1.5 text-[10px] text-black/55">
                     {p.oleh} · {formatTanggal(p.createdAt)}
                   </div>
                 </a>
@@ -92,16 +149,9 @@ export default async function OrderDetailPage({
           {detail.canManageDesignPhotos ? (
             <details className="rounded-lg border border-black/10 bg-white px-3 py-2">
               <summary className="cursor-pointer text-xs font-semibold text-black/60">+ Tambah Foto Desain</summary>
-              <form action={addDesignPhotosAction} className="mt-2 flex flex-wrap items-center gap-2">
+              <form action={addDesignPhotosAction} className="mt-2 flex flex-wrap items-end gap-3">
                 <input type="hidden" name="orderId" value={detail.order.id} />
-                <input
-                  type="file"
-                  name="desainFoto"
-                  accept="image/jpeg,image/png,image/webp"
-                  multiple
-                  required
-                  className="text-xs"
-                />
+                <FileDropzoneInput name="desainFoto" accept="image/jpeg,image/png,image/webp" multiple required boxClassName="h-20 w-20" />
                 <button type="submit" className="rounded-md bg-[var(--brand-blue)] px-3 py-1.5 text-xs font-semibold text-white">
                   Unggah
                 </button>
@@ -137,13 +187,21 @@ export default async function OrderDetailPage({
         </div>
 
         {activeTab === 'ringkasan' ? (
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <Field label="Pelanggan" value={detail.pelangganDisplay} />
-            <Field label="Kontak" value={detail.kontakDisplay} />
-            <Field label="Harga Jual" value={detail.hargaDisplay} />
-            {detail.hargaModalDisplay !== null ? <Field label="Harga Modal (Total)" value={detail.hargaModalDisplay} /> : null}
-            <Field label="Tanggal Masuk" value={formatTanggal(detail.order.tanggal_masuk)} />
-            <Field label="Deadline" value={formatTanggal(detail.order.deadline)} />
+          <div className="flex flex-col gap-4">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <Field label="Pelanggan" value={detail.pelangganDisplay} />
+              <Field label="Kontak" value={detail.kontakDisplay} />
+              <Field label="Harga Jual" value={detail.hargaDisplay} />
+              {detail.hargaModalDisplay !== null ? <Field label="Harga Modal (Total)" value={detail.hargaModalDisplay} /> : null}
+              <Field label="Tanggal Masuk" value={formatTanggal(detail.order.tanggal_masuk)} />
+              <Field label="Deadline" value={formatTanggal(detail.order.deadline)} />
+            </div>
+            {detail.order.catatan ? (
+              <div className="flex flex-col gap-1">
+                <span className="text-xs text-black/50">Catatan / Rincian Pekerjaan</span>
+                <p className="whitespace-pre-wrap text-sm">{detail.order.catatan}</p>
+              </div>
+            ) : null}
           </div>
         ) : null}
 
@@ -160,8 +218,42 @@ export default async function OrderDetailPage({
                 </div>
                 <div className="text-xs text-black/55">Pelaksana: {stage.vendorDisplay}</div>
 
+                {isAdmin ? (
+                  <details className="rounded-lg border border-black/10 bg-black/[0.02] px-3 py-2">
+                    <summary className="cursor-pointer text-xs font-semibold text-black/60">
+                      Ganti Vendor Pelaksana
+                    </summary>
+                    <form action={reassignVendorAction} className="mt-2 flex flex-wrap items-end gap-2">
+                      <input type="hidden" name="stageId" value={stage.id} />
+                      <select
+                        name="vendorId"
+                        defaultValue=""
+                        className="rounded-md border border-black/15 bg-white px-2.5 py-1.5 text-xs font-normal text-black outline-none focus:border-[var(--brand-blue)]"
+                      >
+                        <option value="">— Lepas penugasan —</option>
+                        {vendors.map((v) => (
+                          <option key={v.id} value={v.id}>
+                            {v.nama}
+                            {v.is_internal ? ' (internal)' : ''}
+                          </option>
+                        ))}
+                      </select>
+                      <SubmitButton
+                        pendingText="Menyimpan…"
+                        className="rounded-md bg-[var(--brand-blue)] px-3 py-1.5 text-xs font-semibold text-white"
+                      >
+                        Pindahkan
+                      </SubmitButton>
+                    </form>
+                    <p className="mt-1 text-[11px] text-black/55">
+                      Riwayat pembayaran &amp; catatan tahap ini tetap tersimpan — hanya vendor pelaksananya yang
+                      berubah.
+                    </p>
+                  </details>
+                ) : null}
+
                 {stage.restricted ? (
-                  <p className="text-xs italic text-black/45">Detail tahap ini tidak ditampilkan untuk vendor.</p>
+                  <p className="text-xs italic text-black/55">Detail tahap ini tidak ditampilkan untuk vendor.</p>
                 ) : null}
 
                 {stage.canUpload ? (
@@ -169,9 +261,9 @@ export default async function OrderDetailPage({
                     <p className="text-xs text-[oklch(0.4_0.09_65)]">
                       Aturan: foto bukti wajib diunggah sebelum tahap ini bisa ditandai selesai.
                     </p>
-                    <form action={uploadAttachmentAction} className="flex flex-wrap items-center gap-2">
+                    <form action={uploadAttachmentAction} className="flex flex-wrap items-end gap-3">
                       <input type="hidden" name="stageId" value={stage.id} />
-                      <input type="file" name="file" accept="image/*,.pdf,.doc,.docx,.txt" required className="text-xs" />
+                      <FileDropzoneInput name="file" accept="image/*,.pdf,.doc,.docx,.txt" required boxClassName="h-20 w-20" />
                       <button type="submit" className="rounded-md bg-[var(--brand-blue)] px-3 py-1.5 text-xs font-semibold text-white">
                         Unggah
                       </button>
@@ -183,12 +275,15 @@ export default async function OrderDetailPage({
                     {stage.canComplete ? (
                       <form action={markCompleteAction}>
                         <input type="hidden" name="stageId" value={stage.id} />
-                        <button type="submit" className="flex items-center gap-1.5 rounded-md bg-[oklch(0.5_0.12_142)] px-3 py-1.5 text-xs font-semibold text-white">
+                        <SubmitButton
+                          pendingText="Menyimpan…"
+                          className="flex items-center gap-1.5 rounded-md bg-[oklch(0.5_0.12_142)] px-3 py-1.5 text-xs font-semibold text-white"
+                        >
                           Tandai Tahap Selesai
-                        </button>
+                        </SubmitButton>
                       </form>
                     ) : (
-                      <p className="text-xs text-black/45">
+                      <p className="text-xs text-black/55">
                         {stage.fotoCount === 0 ? 'Belum ada foto bukti diunggah.' : ''}
                       </p>
                     )}
@@ -196,26 +291,80 @@ export default async function OrderDetailPage({
                 ) : null}
 
                 {stage.showHonor ? (
-                  <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-black/[0.03] p-2.5">
-                    <span className="text-xs">
-                      Honor vendor tahap ini: <strong>{stage.honorJumlahLabel}</strong>
-                    </span>
-                    <span className="flex items-center gap-2">
+                  <div className="flex flex-col gap-2 rounded-lg bg-black/[0.03] p-2.5">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div className="flex flex-wrap gap-3 text-xs">
+                        <span>
+                          Total Pembayaran: <strong>{stage.honorJumlahLabel}</strong>
+                        </span>
+                        <span>
+                          Sudah Dibayarkan: <strong>{stage.honorDibayarLabel}</strong>
+                        </span>
+                        {stage.honorSisaRaw > 0 ? (
+                          <span className="text-black/55">
+                            Sisa: <strong>{stage.honorSisaLabel}</strong>
+                          </span>
+                        ) : null}
+                      </div>
                       <span
                         className="rounded-full px-2.5 py-1 text-[11px] font-semibold"
                         style={{ background: stage.honorBadgeBg, color: stage.honorBadgeFg }}
                       >
                         {stage.honorStatusLabel}
                       </span>
-                      {stage.canMarkPaid ? (
-                        <form action={markPaidAction}>
-                          <input type="hidden" name="stageId" value={stage.id} />
-                          <button type="submit" className="rounded-md bg-[var(--brand-blue)] px-2.5 py-1 text-[11px] font-semibold text-white">
-                            Tandai Sudah Dibayar
-                          </button>
-                        </form>
-                      ) : null}
-                    </span>
+                    </div>
+                    {stage.canRecordPayment ? (
+                      <form action={recordHonorPaymentAction} className="flex flex-wrap items-end gap-2">
+                        <input type="hidden" name="stageId" value={stage.id} />
+                        <label className="flex flex-col gap-1 text-[11px] font-medium text-black/60">
+                          Catat Pembayaran (Rp)
+                          <input
+                            name="jumlahBayar"
+                            type="number"
+                            min={0}
+                            max={stage.honorSisaRaw}
+                            step={1000}
+                            defaultValue={stage.honorSisaRaw}
+                            className="w-40 rounded-md border border-black/15 px-2.5 py-1.5 text-xs font-normal text-black outline-none focus:border-[var(--brand-blue)]"
+                          />
+                        </label>
+                        <label className="flex flex-col gap-1 text-[11px] font-medium text-black/60">
+                          Catatan (opsional)
+                          <input
+                            name="catatanBayar"
+                            type="text"
+                            placeholder="misalnya: DP, Pelunasan"
+                            className="w-40 rounded-md border border-black/15 px-2.5 py-1.5 text-xs font-normal text-black outline-none focus:border-[var(--brand-blue)]"
+                          />
+                        </label>
+                        <SubmitButton
+                          pendingText="Menyimpan…"
+                          className="rounded-md bg-[var(--brand-blue)] px-2.5 py-1.5 text-[11px] font-semibold text-white"
+                        >
+                          Catat Pembayaran
+                        </SubmitButton>
+                      </form>
+                    ) : null}
+                    {stage.honorPayments.length > 0 ? (
+                      <details className="text-xs">
+                        <summary className="cursor-pointer font-semibold text-black/60">
+                          Riwayat Pembayaran ({stage.honorPayments.length})
+                        </summary>
+                        <div className="mt-1.5 flex flex-col gap-1">
+                          {stage.honorPayments.map((p) => (
+                            <div key={p.id} className="flex flex-wrap items-center justify-between gap-2 rounded-md bg-white px-2.5 py-1.5">
+                              <span>
+                                <strong>{p.jumlahLabel}</strong>
+                                {p.catatan ? <span className="text-black/55"> — {p.catatan}</span> : null}
+                              </span>
+                              <span className="text-black/55">
+                                {p.tanggalLabel} · {p.oleh}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      </details>
+                    ) : null}
                   </div>
                 ) : null}
 
@@ -341,9 +490,9 @@ export default async function OrderDetailPage({
               <div key={stage.id} className="flex flex-col gap-2">
                 <div className="font-heading text-[13px] font-semibold text-black/70">{stage.nama}</div>
                 {stage.restricted ? (
-                  <p className="text-xs italic text-black/45">Lampiran tahap ini tidak ditampilkan untuk vendor.</p>
+                  <p className="text-xs italic text-black/55">Lampiran tahap ini tidak ditampilkan untuk vendor.</p>
                 ) : stage.attachments.length === 0 ? (
-                  <p className="text-xs text-black/45">Belum ada lampiran.</p>
+                  <p className="text-xs text-black/55">Belum ada lampiran.</p>
                 ) : (
                   stage.attachments.map((a) => (
                     <a
@@ -361,7 +510,7 @@ export default async function OrderDetailPage({
                         />
                       ) : null}
                       <span className="min-w-0 flex-grow truncate">{a.nama}</span>
-                      <span className="flex-shrink-0 text-[11px] text-black/45">
+                      <span className="flex-shrink-0 text-[11px] text-black/55">
                         {a.oleh} · {formatTanggal(a.createdAt)}
                       </span>
                       {a.pendingSync ? (
@@ -399,9 +548,12 @@ export default async function OrderDetailPage({
                   <span className="text-xs text-black/55">Pelaksana: {stage.vendorDisplay}</span>
                 </div>
                 {stage.showHonor ? (
-                  <div className="flex items-center gap-2 text-xs">
+                  <div className="flex flex-wrap items-center gap-2 text-xs">
                     <span>
-                      Honor vendor: <strong>{stage.honorJumlahLabel}</strong>
+                      Total Pembayaran: <strong>{stage.honorJumlahLabel}</strong>
+                    </span>
+                    <span>
+                      Sudah Dibayarkan: <strong>{stage.honorDibayarLabel}</strong>
                     </span>
                     <span className="rounded-full px-2.5 py-1 text-[11px] font-semibold" style={{ background: stage.honorBadgeBg, color: stage.honorBadgeFg }}>
                       {stage.honorStatusLabel}
@@ -443,7 +595,7 @@ export default async function OrderDetailPage({
                       />
                     ) : null}
                     <span className="min-w-0 flex-grow truncate">{a.nama}</span>
-                    <span className="flex-shrink-0 text-[11px] text-black/45">{a.oleh}</span>
+                    <span className="flex-shrink-0 text-[11px] text-black/55">{a.oleh}</span>
                   </a>
                 ))}
               </div>

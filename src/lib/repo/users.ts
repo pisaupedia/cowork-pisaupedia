@@ -19,6 +19,20 @@ export function listUsersForVendor(vendorId: string): UserRow[] {
   return db.prepare('SELECT * FROM users WHERE vendor_id = ? ORDER BY username ASC').all(vendorId) as unknown as UserRow[];
 }
 
+/** Semua akun ADMIN — dulu aplikasi ini hanya bisa punya SATU admin (tidak
+ * ada jalan dari dalam aplikasi untuk membuat admin kedua), jadi kalau
+ * satu-satunya admin lupa password atau tidak bisa akses, operasional bisa
+ * terhenti total. Lihat createAdminAction di
+ * src/app/(app)/vendors/actions.ts. */
+export function listAdmins(): UserRow[] {
+  return db.prepare("SELECT * FROM users WHERE role = 'ADMIN' ORDER BY name ASC").all() as unknown as UserRow[];
+}
+
+export function countAdmins(): number {
+  const row = db.prepare("SELECT COUNT(*) AS n FROM users WHERE role = 'ADMIN'").get() as { n: number };
+  return row.n;
+}
+
 export function createUser(opts: {
   username: string;
   password: string;

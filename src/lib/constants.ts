@@ -7,7 +7,26 @@ export const DIVISIONS = [
 
 export type Divisi = (typeof DIVISIONS)[number];
 
-export const COMPANY_NAME = 'Pisaupedia';
+/** Warna identitas per divisi (permintaan pengguna) — dipakai untuk label
+ * teks & bar di "Distribusi per Divisi" (Dashboard) dan judul kolom di
+ * Papan Kanban, supaya keempat divisi konsisten dikenali dari warnanya di
+ * seluruh aplikasi.
+ *
+ * Catatan: "Cutting & Blacksmith" sebelumnya memakai hue 25 (merah) — sama
+ * persis dengan warna status "Terlambat" di src/lib/derive.ts
+ * (STATUS_COLORS.terlambat, juga hue 25). Karena kartu pesanan menampilkan
+ * badge status DAN warna divisi berdampingan, kartu divisi ini yang
+ * sebetulnya masih aman/tepat waktu bisa terlihat seperti sedang terlambat
+ * sekilas pandang. Diganti ke rose/magenta (hue 340) — tetap terkesan
+ * "api tempa" yang hangat, tapi tidak lagi bentrok dengan warna alert. */
+export const DIVISION_COLORS: Record<Divisi, string> = {
+  'Cutting & Blacksmith': 'oklch(0.5 0.17 340)', // Rose/magenta (dulu merah — bentrok dengan status "Terlambat")
+  'Shaping & Heat Threatment': 'oklch(0.7 0.15 90)', // Kuning
+  'Handle & Cover': 'oklch(0.48 0.09 60)', // Coklat
+  'Selesai Produksi': 'oklch(0.5 0.12 142)', // Hijau
+};
+
+export const COMPANY_NAME = 'Pisaupedia Co';
 
 /** Kode konfirmasi yang harus diketik ulang sebelum operasi hapus data
  * (dokumen invoice/quotation/delivery note, dst.) benar-benar dijalankan.

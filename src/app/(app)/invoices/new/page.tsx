@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { requireUser } from '@/lib/session';
 import { nextDocumentNumber } from '@/lib/repo/documents';
+import { getOrderById } from '@/lib/repo/orders';
 import {
   COMPANY_PROFILE,
   DEFAULT_BANK_INFO,
@@ -22,16 +23,25 @@ const DOC_TITLE_CLASS: Record<DocType, string> = { invoice: 'invoice', quotation
 export default async function NewDocumentPage({
   searchParams,
 }: {
-  searchParams: Promise<{ type?: string }>;
+  searchParams: Promise<{ type?: string; orderId?: string }>;
 }) {
   const user = await requireUser();
   if (user.role !== 'ADMIN') redirect('/dashboard');
 
-  const { type: rawType } = await searchParams;
+  const { type: rawType, orderId } = await searchParams;
   const type: DocType = rawType === 'quotation' || rawType === 'suratjalan' ? rawType : 'invoice';
 
   const { nomor } = nextDocumentNumber(type);
   const today = new Date().toISOString().slice(0, 10);
+
+  // Kalau dibuka lewat tombol "Buat Invoice dari Pesanan Ini" di halaman
+  // detail pesanan, prefill nama klien & satu baris item dari data pesanan
+  // itu — supaya tidak perlu diketik ulang dari nol. Lihat catatan tautan
+  // order_id di src/lib/schema.sql/repo/documents.ts.
+  const sourceOrder = orderId ? getOrderById(orderId) : undefined;
+  const prefillItem = sourceOrder
+    ? [{ deskripsi: sourceOrder.jenis, qty: sourceOrder.jumlah, harga: sourceOrder.harga }]
+    : undefined;
 
   return (
     <div className="flex max-w-[1000px] flex-col gap-4">
@@ -39,11 +49,17 @@ export default async function NewDocumentPage({
         &larr; Back
       </Link>
 
+      {sourceOrder ? (
+        <div className="no-print rounded-md px-3 py-2 text-xs" style={{ background: 'var(--iv-accent-light)', color: 'var(--iv-ink)' }}>
+          Prefilled from production order <strong>{sourceOrder.kode}</strong> ({sourceOrder.pelanggan}).
+        </div>
+      ) : null}
+
       <div className="iv-tabs no-print">
         {(['invoice', 'suratjalan', 'quotation'] as DocType[]).map((t) => (
           <Link
             key={t}
-            href={`/invoices/new?type=${t}`}
+            href={`/invoices/new?type=${t}${orderId ? `&orderId=${orderId}` : ''}`}
             className={`iv-tab-btn ${t === type ? `active ${TAB_CLASS[t]}` : ''}`}
           >
             {t === 'invoice' ? '🧾' : t === 'suratjalan' ? '🚚' : '📋'} {DOC_TYPE_LABEL[t]}
@@ -53,6 +69,7 @@ export default async function NewDocumentPage({
 
       <form action={createDocumentAction} className="iv-sheet flex flex-col gap-3">
         <input type="hidden" name="type" value={type} />
+        {sourceOrder ? <input type="hidden" name="orderId" value={sourceOrder.id} /> : null}
 
         <div className="iv-top-row">
           <div className="iv-brand">
@@ -113,28 +130,27 @@ export default async function NewDocumentPage({
               </div>
             </div>
           </div>
-        ) : (
-          <div className="iv-parties">
-            <div className="iv-party">
-              <h3>{type === 'quotation' ? 'Quote To' : 'Bill To'}</h3>
-              <div className="iv-field">
-                <input name="clientName" placeholder="Client / Company Name" />
-              </div>
-              <div className="iv-field">
-                <textarea name="clientAddress" rows={2} placeholder="Client address" />
-              </div>
-              <div className="iv-field">
-                <input name="clientContact" placeholder="Client phone / email" />
-              </div>
-            </div>
-          </div>
-        )}
+        ) : null}
 
         <div>
-          <h2 className="mb-2 font-heading text-sm font-semibold no-print" style={{ color: 'var(--iv-ink)' }}>
-            Items
-          </h2>
-          <DocumentEditor type={type} />
+          <DocumentEditor
+            type={type}
+            billTo={
+              <div className="iv-party">
+                <h3>{type === 'quotation' ? 'Quote To' : 'Bill To'}</h3>
+                <div className="iv-field">
+                  <input name="clientName" placeholder="Client / Company Name" defaultValue={sourceOrder?.pelanggan ?? ''} />
+                </div>
+                <div className="iv-field">
+                  <textarea name="clientAddress" rows={2} placeholder="Client address" />
+                </div>
+                <div className="iv-field">
+                  <input name="clientContact" placeholder="Client phone / email" />
+                </div>
+              </div>
+            }
+            initialItems={prefillItem}
+          />
         </div>
 
         <div className="iv-footer-fields">

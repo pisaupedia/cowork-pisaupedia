@@ -3,11 +3,14 @@ import { getCurrentUser } from '@/lib/session';
 import { logoutAction } from '@/app/login/actions';
 import { listPendingApprovalOrders } from '@/lib/view';
 import { SidebarNav } from '@/components/sidebar-nav';
+import { Toast } from '@/components/toast';
+import { readFlash } from '@/lib/flash';
 import { COMPANY_NAME } from '@/lib/constants';
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const user = await getCurrentUser();
   if (!user) redirect('/login');
+  const flash = await readFlash();
 
   const isAdmin = user.role === 'ADMIN';
   const pendingCount = isAdmin ? listPendingApprovalOrders().length : 0;
@@ -61,6 +64,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       </aside>
 
       <main className="min-w-0 flex-grow overflow-x-hidden bg-[oklch(0.97_0.005_255)] p-4 md:p-8">{children}</main>
+      <Toast flash={flash} />
     </div>
   );
 }

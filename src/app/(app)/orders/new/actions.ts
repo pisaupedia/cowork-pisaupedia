@@ -10,7 +10,7 @@ import { addDesignPhoto } from '@/lib/repo/designPhotos';
 import { uploadsDir } from '@/lib/db';
 import { DIVISIONS, type Divisi } from '@/lib/constants';
 
-const MIN_DESIGN_PHOTOS = 3;
+const MIN_DESIGN_PHOTOS = 1;
 const MAX_DESIGN_PHOTO_BYTES = 8 * 1024 * 1024;
 const ALLOWED_PHOTO_EXT = new Set(['.jpg', '.jpeg', '.png', '.webp']);
 
@@ -45,6 +45,7 @@ export async function createOrderAction(formData: FormData): Promise<void> {
   const deadline = String(formData.get('deadline') ?? '');
   const isCustom = formData.get('isCustom') === 'on';
   const approvalNote = String(formData.get('approvalNote') ?? '').trim() || null;
+  const catatan = String(formData.get('catatan') ?? '').trim() || null;
 
   if (!jenis || !pelanggan || !jumlah || !harga || !tanggalMasuk || !deadline) {
     throw new Error('Semua field wajib diisi.');
@@ -66,7 +67,7 @@ export async function createOrderAction(formData: FormData): Promise<void> {
   const extraCost = Number(formData.get('extraCost') ?? 0) || 0;
 
   const order = createOrder({
-    jenis, pelanggan, kontak, jumlah, harga, tanggalMasuk, deadline, isCustom, approvalNote, vendorPerDivisi,
+    jenis, pelanggan, kontak, jumlah, harga, tanggalMasuk, deadline, isCustom, approvalNote, catatan, vendorPerDivisi,
     honorPerDivisi, materialCostBaja, materialCostKayu, shippingCost, extraCost,
   });
 

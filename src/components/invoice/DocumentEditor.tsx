@@ -41,6 +41,7 @@ function fmtPreview(n: number, code: CurrencyCode): string {
 
 export function DocumentEditor({
   type,
+  billTo,
   initialItems,
   initialCurrency,
   initialOverallDiscountPercent,
@@ -48,6 +49,15 @@ export function DocumentEditor({
   initialTaxPercent,
 }: {
   type: DocType;
+  /**
+   * Blok "Bill To"/"Quote To" (server-rendered, dari page.tsx) — dirender
+   * di sisi kiri baris yang sama dengan Currency, bukan di bawahnya, biar
+   * sesuai tampilan aplikasi standalone aslinya (lihat referensi tangkapan
+   * layar pengguna). Cuma dipakai untuk Invoice/Quotation (`hasPricing`);
+   * Delivery Note tetap merender parties-nya sendiri di page.tsx karena
+   * sudah punya 2 blok (Deliver To + Driver) tanpa Currency.
+   */
+  billTo?: React.ReactNode;
   initialItems?: Partial<EditorItem>[];
   initialCurrency?: CurrencyCode;
   initialOverallDiscountPercent?: number;
@@ -108,20 +118,26 @@ export function DocumentEditor({
       <input type="hidden" name="itemsJson" value={itemsJson} />
 
       {hasPricing ? (
-        <div className="iv-party right" style={{ marginBottom: 4 }}>
-          <h3>Currency</h3>
-          <div className="iv-field">
-            <select name="currency" value={currency} onChange={(e) => setCurrency(e.target.value as CurrencyCode)}>
-              {CURRENCIES.map((c) => (
-                <option key={c.code} value={c.code}>
-                  {c.label}
-                </option>
-              ))}
-            </select>
+        <div className="iv-parties">
+          {billTo}
+          <div className="iv-party right">
+            <h3>Currency</h3>
+            <div className="iv-field">
+              <select name="currency" value={currency} onChange={(e) => setCurrency(e.target.value as CurrencyCode)}>
+                {CURRENCIES.map((c) => (
+                  <option key={c.code} value={c.code}>
+                    {c.label}
+                  </option>
+                ))}
+              </select>
+            </div>
           </div>
         </div>
       ) : null}
 
+      <h2 className="mb-1 font-heading text-sm font-semibold no-print" style={{ color: 'var(--iv-ink)' }}>
+        Items
+      </h2>
       <div className="iv-table-scroll">
         <table className="iv-table">
           <thead>

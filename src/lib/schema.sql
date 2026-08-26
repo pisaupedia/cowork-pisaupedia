@@ -39,6 +39,18 @@ CREATE TABLE IF NOT EXISTS orders (
   is_custom INTEGER NOT NULL DEFAULT 0,
   approval_status TEXT NOT NULL DEFAULT 'DISETUJUI' CHECK (approval_status IN ('MENUNGGU', 'DISETUJUI', 'DITOLAK')),
   approval_note TEXT,
+  -- Catatan/rincian pekerjaan umum, diisi admin saat membuat pesanan baru
+  -- (opsional) — beda dari approval_note di atas yang khusus alasan
+  -- pesanan custom untuk ditinjau admin/sales. Terlihat oleh semua yang
+  -- boleh melihat pesanan ini (admin & vendor yang terlibat), lihat tab
+  -- "Ringkasan" di halaman detail pesanan.
+  catatan TEXT,
+  -- Alasan penolakan (diisi admin saat menolak pesanan custom di panel
+  -- Persetujuan) — beda dari approval_note yang isinya alasan PENGAJUAN.
+  -- Dipakai supaya pesanan yang ditolak tidak jadi jalan buntu: pengajunya
+  -- tahu apa yang perlu diperbaiki sebelum mengajukan ulang (lihat
+  -- resubmitOrderAction di src/app/(app)/approval/actions.ts).
+  reject_reason TEXT,
   -- Pesanan yang sudah selesai penuh (semua tahap SELESAI) bisa diarsipkan
   -- oleh admin dari papan Kanban (kolom "Selesai Produksi") supaya tidak
   -- menumpuk di dashboard/kanban/kalender — data TIDAK dihapus, hanya
@@ -58,6 +70,12 @@ CREATE TABLE IF NOT EXISTS order_stages (
   vendor_id TEXT REFERENCES vendors(id),
   status TEXT NOT NULL DEFAULT 'MENUNGGU' CHECK (status IN ('MENUNGGU', 'BERJALAN', 'SELESAI')),
   honor_jumlah INTEGER NOT NULL DEFAULT 0,
+  -- honor_dibayar = akumulasi nominal yang SUDAH dibayarkan ke vendor untuk
+  -- tahap ini (bisa dicicil/DP, tidak harus sekali lunas — lihat
+  -- recordHonorPayment di src/lib/repo/stages.ts). honor_status & honor_tanggal_bayar
+  -- ikut disinkronkan setiap kali honor_dibayar berubah, murni sebagai ringkasan
+  -- turunan (honor_status = 'SUDAH' kalau honor_dibayar >= honor_jumlah).
+  honor_dibayar INTEGER NOT NULL DEFAULT 0,
   honor_status TEXT NOT NULL DEFAULT 'BELUM' CHECK (honor_status IN ('BELUM', 'SUDAH')),
   honor_tanggal_bayar TEXT,
   -- Komponen harga modal, diisi manual oleh admin (bukan otomatis). Hanya
@@ -76,6 +94,23 @@ CREATE TABLE IF NOT EXISTS notes (
   stage_id TEXT NOT NULL REFERENCES order_stages(id),
   penulis TEXT NOT NULL,
   teks TEXT NOT NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+-- Riwayat setiap kali admin mencatat pembayaran honor ke vendor untuk satu
+-- tahap (lihat recordHonorPayment di src/lib/repo/stages.ts) — supaya kasus
+-- vendor minta dibayar bertahap (misalnya DP dulu sebelum mulai kerja, lalu
+-- pelunasan sisanya setelah selesai) punya jejak yang jelas: kapan, berapa,
+-- dan catatannya apa (opsional, misal "DP" / "Pelunasan"). SUM(jumlah) untuk
+-- satu stage_id selalu sama dengan order_stages.honor_dibayar pada stage itu
+-- — honor_dibayar adalah angka ringkasan/turunan yang dipertahankan tetap
+-- sinkron oleh recordHonorPayment, tabel ini adalah rincian per transaksinya.
+CREATE TABLE IF NOT EXISTS honor_payments (
+  id TEXT PRIMARY KEY,
+  stage_id TEXT NOT NULL REFERENCES order_stages(id),
+  jumlah INTEGER NOT NULL,
+  catatan TEXT,
+  oleh TEXT NOT NULL,
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
@@ -107,9 +142,27 @@ CREATE TABLE IF NOT EXISTS design_photos (
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
+-- Jejak audit sederhana untuk perubahan yang berdampak/sensitif: edit data
+-- pesanan, edit honor/harga modal tahap, keputusan approve/reject, dan
+-- pergantian vendor pada satu tahap. BUKAN log lengkap setiap aksi di
+-- aplikasi (misalnya upload lampiran/catatan tidak dicatat di sini) —
+-- tujuannya supaya kalau ada perselisihan angka/keputusan, ada jejak siapa
+-- mengubah apa dan kapan, tanpa membuat tabel ini terlalu ramai untuk dibaca.
+CREATE TABLE IF NOT EXISTS audit_log (
+  id TEXT PRIMARY KEY,
+  entity_type TEXT NOT NULL, -- 'order' | 'stage' | 'approval' | 'vendor'
+  entity_id TEXT NOT NULL,
+  action TEXT NOT NULL, -- deskripsi singkat, misal 'edit_pesanan', 'edit_biaya', 'setuju', 'tolak', 'ganti_vendor'
+  detail TEXT, -- ringkasan human-readable "field: nilai lama -> nilai baru"
+  oleh TEXT NOT NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_audit_log_entity ON audit_log(entity_type, entity_id);
 CREATE INDEX IF NOT EXISTS idx_stages_order ON order_stages(order_id);
 CREATE INDEX IF NOT EXISTS idx_stages_vendor ON order_stages(vendor_id);
 CREATE INDEX IF NOT EXISTS idx_notes_stage ON notes(stage_id);
+CREATE INDEX IF NOT EXISTS idx_honor_payments_stage ON honor_payments(stage_id);
 CREATE INDEX IF NOT EXISTS idx_attachments_stage ON attachments(stage_id);
 CREATE INDEX IF NOT EXISTS idx_design_photos_order ON design_photos(order_id);
 CREATE INDEX IF NOT EXISTS idx_sessions_expires ON sessions(expires_at);
@@ -143,6 +196,11 @@ CREATE TABLE IF NOT EXISTS documents (
   sender_name TEXT,        -- suratjalan saja
   driver_sign TEXT,        -- suratjalan saja
   receiver_name TEXT,      -- suratjalan saja
+  -- Tautan opsional ke pesanan produksi asal (diisi kalau dokumen ini dibuat
+  -- lewat tombol "Buat Invoice dari Pesanan Ini" di halaman detail pesanan)
+  -- — supaya modul invoice tidak lagi 100% terputus dari data pesanan.
+  -- NULL untuk dokumen yang dibuat manual dari nol seperti biasa.
+  order_id TEXT REFERENCES orders(id),
   created_by TEXT NOT NULL,
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at TEXT NOT NULL DEFAULT (datetime('now')),

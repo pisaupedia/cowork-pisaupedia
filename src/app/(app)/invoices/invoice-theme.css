@@ -10,6 +10,10 @@
  * aslinya (diberi prefix "iv-" supaya tidak bertumbukan dengan class Tailwind
  * / class aplikasi utama), lalu dipakai ulang oleh halaman-halaman di bawah
  * src/app/(app)/invoices/* dan src/components/invoice/*.
+ *
+ * (Update 24 Agustus 2026: header kop surat & blok alamat dirapikan atas
+ * permintaan pengguna — bukan mengganti bahasa/tema, hanya spacing & lebar
+ * kolom. Lihat catatan di ".iv-meta-block" dan ".iv-party" di bawah.)
  */
 
 .iv-root {
@@ -147,27 +151,30 @@
   background: var(--iv-card);
   border: 1px solid var(--iv-line);
   border-radius: 12px;
-  padding: 36px;
+  padding: 28px 30px;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
 }
 .iv-top-row {
   display: flex;
   justify-content: space-between;
-  gap: 24px;
+  gap: 20px;
   flex-wrap: wrap;
-  margin-bottom: 16px;
+  align-items: flex-start;
+  margin-bottom: 12px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--iv-line);
 }
 .iv-brand {
   display: flex;
-  gap: 14px;
+  gap: 12px;
   align-items: flex-start;
-  flex: 1 1 320px;
+  flex: 1 1 300px;
   min-width: 0;
 }
 .iv-logo-box {
-  width: 64px;
-  height: 64px;
-  border-radius: 10px;
+  width: 50px;
+  height: 50px;
+  border-radius: 9px;
   overflow: hidden;
   flex-shrink: 0;
   background: #fafafa;
@@ -180,23 +187,30 @@
   display: block;
 }
 .iv-company-name {
-  font-size: 18px;
+  font-size: 15px;
   font-weight: 700;
-  margin: 0 0 2px;
+  margin: 0 0 1px;
+  line-height: 1.25;
 }
 .iv-company-line {
-  font-size: 13px;
+  font-size: 11.5px;
   color: var(--iv-muted);
-  line-height: 1.5;
+  line-height: 1.25;
 }
+/* Info dokumen (nomor/tanggal) — dibuat ringkas & dibatasi lebarnya
+   (bukan teks polos yang boleh melebar), tapi TANPA kotak/kartu bertepi
+   — atas permintaan pengguna, tampilan ini mengikuti apa adanya gaya
+   aplikasi invoice standalone aslinya, yang polos tanpa border/box. */
 .iv-meta-block {
-  min-width: 220px;
+  min-width: 170px;
+  max-width: 220px;
   text-align: right;
 }
 .iv-doc-title {
-  font-size: 26px;
-  letter-spacing: 0.06em;
-  margin: 0 0 10px;
+  font-size: 17px;
+  letter-spacing: 0.05em;
+  margin: 0 0 4px;
+  line-height: 1.2;
   text-align: right;
   font-weight: 700;
 }
@@ -210,24 +224,26 @@
   color: var(--iv-quo-accent);
 }
 .iv-meta-field {
-  margin-bottom: 4px;
+  margin-bottom: 1px;
 }
 .iv-meta-field label {
   display: block;
-  font-size: 10px;
+  font-size: 9.5px;
+  line-height: 1.2;
   text-transform: uppercase;
   letter-spacing: 0.04em;
   color: var(--iv-muted);
-  margin-bottom: 2px;
+  margin-bottom: 0;
 }
 .iv-meta-field input {
   border: none;
   border-bottom: 1px solid transparent;
   background: transparent;
-  font-size: 14px;
+  font-size: 13px;
+  line-height: 1.2;
   color: var(--iv-ink);
   width: 100%;
-  padding: 2px 0;
+  padding: 1px 0;
   font-family: inherit;
   text-align: right;
 }
@@ -236,40 +252,59 @@
   border-bottom-color: var(--iv-accent);
 }
 .iv-meta-static {
-  font-size: 14px;
-  padding: 2px 0;
+  font-size: 13px;
+  line-height: 1.2;
+  padding: 1px 0;
 }
 
+/* Blok alamat (Bill To/Quote To/Deliver To + Driver + Currency) —
+   sebelumnya `.iv-party` memakai `flex: 1`, jadi kalau hanya ada SATU
+   blok (kasus Bill To di Invoice/Quotation), blok itu melebar mengisi
+   seluruh sisa lebar dokumen sampai ke kanan, membuat kolom isian
+   alamat jadi sangat panjang dan kurang enak dilihat. Sekarang dibatasi
+   lebar maksimalnya (tanpa kotak/kartu bertepi — polos seperti aplikasi
+   standalone aslinya), dan Currency untuk Invoice/Quotation ditaruh di
+   slot kanan baris yang sama (lihat prop `billTo` di DocumentEditor),
+   supaya ruang di sebelah Bill To tidak kosong sia-sia. */
 .iv-parties {
   display: flex;
-  gap: 40px;
+  justify-content: space-between;
+  gap: 20px;
   flex-wrap: wrap;
   margin-bottom: 14px;
 }
 .iv-party {
-  flex: 1;
+  flex: 0 1 320px;
   min-width: 220px;
+  max-width: 360px;
 }
 .iv-party.right {
   text-align: right;
+  /* Blok "Driver" di Delivery Note cuma berisi satu field (Courier), jadi
+     dibuat lebih ramping dari blok "Deliver To" di sebelahnya, supaya
+     berdua tetap muat sebaris tanpa turun ke baris baru. */
+  flex: 0 1 220px;
+  min-width: 180px;
+  max-width: 260px;
 }
 .iv-party h3 {
-  font-size: 11px;
+  font-size: 10.5px;
   text-transform: uppercase;
   letter-spacing: 0.05em;
   color: var(--iv-muted);
-  margin: 0 0 5px;
+  margin: 0 0 4px;
 }
 .iv-field {
-  margin-bottom: 4px;
+  margin-bottom: 3px;
 }
 .iv-field label {
   display: block;
-  font-size: 10px;
+  font-size: 9.5px;
+  line-height: 1.2;
   text-transform: uppercase;
   letter-spacing: 0.04em;
   color: var(--iv-muted);
-  margin-bottom: 2px;
+  margin-bottom: 1px;
 }
 .iv-field input,
 .iv-field textarea,
@@ -277,10 +312,11 @@
   border: 1px solid var(--iv-line);
   border-radius: 6px;
   background: var(--iv-card);
-  font-size: 14px;
+  font-size: 13px;
+  line-height: 1.3;
   color: var(--iv-ink);
   width: 100%;
-  padding: 6px 8px;
+  padding: 5px 8px;
   font-family: inherit;
 }
 .iv-field input:focus,
@@ -666,17 +702,24 @@
   .iv-meta-block .iv-meta-field input {
     text-align: left;
   }
+  .iv-meta-block {
+    max-width: 100%;
+    text-align: left;
+    padding: 10px 12px;
+  }
   .iv-doc-title {
     text-align: left;
-    font-size: 21px;
-    margin-top: 10px;
+    font-size: 19px;
+    margin-top: 4px;
   }
   .iv-parties {
     gap: 18px;
     margin-bottom: 12px;
   }
   .iv-party {
+    flex: 1 1 100%;
     min-width: 100%;
+    max-width: 100%;
   }
   .iv-party.right {
     text-align: left;

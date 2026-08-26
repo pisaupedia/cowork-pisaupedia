@@ -3,6 +3,7 @@ import { requireUser } from '@/lib/session';
 import { listVendors } from '@/lib/repo/vendors';
 import { DIVISIONS } from '@/lib/constants';
 import { DesignPhotoInput } from '@/components/design-photo-input';
+import { SubmitButton } from '@/components/submit-button';
 import { createOrderAction } from './actions';
 
 export default async function NewOrderPage() {
@@ -26,6 +27,15 @@ export default async function NewOrderPage() {
           <Field name="tanggalMasuk" label="Tanggal Masuk" type="date" defaultValue={today} required />
           <Field name="deadline" label="Deadline" type="date" required />
         </div>
+
+        <label className="flex flex-col gap-1 text-xs font-medium text-black/60">
+          Catatan / Rincian Pekerjaan
+          <textarea
+            name="catatan"
+            placeholder="Rincian tambahan mengenai pesanan ini, misalnya ukuran, jenis bahan yang diminta, atau detail lain di luar kolom di atas…"
+            className="min-h-20 rounded-lg border border-black/15 px-3 py-2 text-sm font-normal text-black outline-none focus:border-[var(--brand-blue)]"
+          />
+        </label>
 
         <div className="flex flex-col gap-3">
           <div>
@@ -135,14 +145,14 @@ export default async function NewOrderPage() {
 
         <div className="flex flex-col gap-2 rounded-xl border border-black/10 p-3.5">
           <div>
-            <h2 className="font-heading text-sm font-semibold">Foto Desain Pisau (wajib, minimal 3 foto)</h2>
+            <h2 className="font-heading text-sm font-semibold">Foto Desain Pisau (wajib, minimal 1 foto)</h2>
             <p className="text-xs text-black/55">
               Foto ini akan terlihat langsung oleh SEMUA divisi/vendor yang mengerjakan pesanan ini (tidak dibatasi
               per tahap seperti lampiran biasa) — tujuannya menyamakan pemahaman semua tim mengenai desain pisau
               yang dimaksud sebelum mulai bekerja.
             </p>
           </div>
-          <DesignPhotoInput min={3} />
+          <DesignPhotoInput min={1} />
         </div>
 
         <div className="flex flex-col gap-2 rounded-lg bg-black/[0.03] p-3.5">
@@ -157,9 +167,12 @@ export default async function NewOrderPage() {
           />
         </div>
 
-        <button type="submit" className="w-fit rounded-lg bg-[var(--brand-blue)] px-5 py-2.5 text-sm font-semibold text-white">
+        <SubmitButton
+          pendingText="Menyimpan Pesanan…"
+          className="w-fit rounded-lg bg-[var(--brand-blue)] px-5 py-2.5 text-sm font-semibold text-white"
+        >
           Buat Pesanan
-        </button>
+        </SubmitButton>
       </form>
     </div>
   );

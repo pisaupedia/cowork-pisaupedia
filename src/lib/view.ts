@@ -1,7 +1,7 @@
-import { DIVISIONS } from '@/lib/constants';
+import { DIVISIONS, type Divisi } from '@/lib/constants';
 import { formatRupiah, formatTanggal, statusForDeadline, STATUS_COLORS, type StatusKey } from '@/lib/derive';
 import { listOrders, getOrderById, listArchivedOrders } from '@/lib/repo/orders';
-import { listStagesForOrder, computeHargaModal } from '@/lib/repo/stages';
+import { listStagesForOrder, computeHargaModal, listHonorPaymentsForStage, listStagesForVendor } from '@/lib/repo/stages';
 import { listNotesForStage } from '@/lib/repo/notes';
 import { listAttachmentsForStage } from '@/lib/repo/attachments';
 import { listDesignPhotosForOrder } from '@/lib/repo/designPhotos';
@@ -122,9 +122,17 @@ export interface DashboardView {
   statMendekati: number;
   statTerlambat: number;
   statSelesaiProduksi: number;
+  /** SEMUA pesanan yang terlihat user ini KECUALI yang sudah di divisi
+   * "Selesai Produksi" (pesanan di divisi itu sudah di ujung alur produksi,
+   * jadi tidak perlu ikut nongkrong di daftar "Perlu Perhatian" — lihat
+   * `statSelesaiProduksi` untuk hitungannya). Diurutkan terlambat →
+   * mendekati → aman, supaya yang paling butuh perhatian tetap tampil di
+   * atas walau daftarnya sekarang lengkap. */
   attention: OrderCardView[];
-  divisiCounts: { name: string; count: number; barWidth: number }[];
+  divisiCounts: { name: Divisi; count: number; barWidth: number }[];
 }
+
+const ATTENTION_RANK: Record<StatusKey, number> = { terlambat: 0, mendekati: 1, aman: 2 };
 
 export function buildDashboard(user: SessionUser): DashboardView {
   const visible = listVisibleOrders(user);
@@ -142,14 +150,45 @@ export function buildDashboard(user: SessionUser): DashboardView {
     statTerlambat: cards.filter((c) => c.statusKey === 'terlambat').length,
     statSelesaiProduksi: cards.filter((c) => c.currentDivisi === 'Selesai Produksi').length,
     attention: cards
-      .filter((c) => c.statusKey !== 'aman')
-      .sort((a, b) => (a.statusKey === b.statusKey ? 0 : a.statusKey === 'terlambat' ? -1 : 1)),
+      .filter((c) => c.currentDivisi !== 'Selesai Produksi')
+      .sort((a, b) => ATTENTION_RANK[a.statusKey] - ATTENTION_RANK[b.statusKey]),
     divisiCounts: divisiCounts.map((d) => ({ ...d, barWidth: Math.round((d.count / maxDiv) * 100) })),
   };
 }
 
+export interface VendorHonorSummary {
+  totalSisa: number;
+  totalSisaLabel: string;
+  totalDibayar: number;
+  totalDibayarLabel: string;
+  jumlahTahapAktif: number;
+}
+
+/** Ringkasan honor untuk SATU akun vendor (dipakai sebagai pengganti panel
+ * "Distribusi per Divisi" di Dashboard untuk vendor yang hanya bekerja di
+ * satu divisi — panel distribusi divisi jadi kurang relevan untuk mereka
+ * karena hampir selalu kosong di divisi lain, lihat buildDashboard di bawah).
+ * Mencakup SEMUA tahap yang pernah ditugaskan ke vendor ini, bukan hanya
+ * yang sedang terlihat di dashboard — supaya ringkasan honornya lengkap. */
+export function buildVendorHonorSummary(vendorId: string): VendorHonorSummary {
+  const stages = listStagesForVendor(vendorId).filter((s) => s.vendor_is_internal === 0);
+  let totalSisa = 0;
+  let totalDibayar = 0;
+  stages.forEach((s) => {
+    totalSisa += Math.max(0, s.honor_jumlah - s.honor_dibayar);
+    totalDibayar += s.honor_dibayar;
+  });
+  return {
+    totalSisa,
+    totalSisaLabel: formatRupiah(totalSisa),
+    totalDibayar,
+    totalDibayarLabel: formatRupiah(totalDibayar),
+    jumlahTahapAktif: stages.filter((s) => s.status !== 'SELESAI').length,
+  };
+}
+
 export interface KanbanColumnView {
-  name: string;
+  name: Divisi;
   orders: OrderCardView[];
 }
 
@@ -178,12 +217,23 @@ export interface StageView {
   notes: { id: string; penulis: string; teks: string; createdAt: string }[];
   attachments: { id: string; nama: string; tipe: string; oleh: string; createdAt: string; pendingSync: boolean }[];
   showHonor: boolean;
+  /** Total Pembayaran — total honor yang disepakati untuk tahap ini. */
   honorJumlahLabel: string;
   honorJumlahRaw: number;
+  /** Sudah Dibayarkan — akumulasi nominal yang sudah dibayar (bisa DP/dicicil). */
+  honorDibayarLabel: string;
+  honorDibayarRaw: number;
+  /** Sisa yang belum dibayarkan (Total Pembayaran - Sudah Dibayarkan). */
+  honorSisaLabel: string;
+  honorSisaRaw: number;
   honorStatusLabel: string;
   honorBadgeBg: string;
   honorBadgeFg: string;
-  canMarkPaid: boolean;
+  /** Admin bisa mencatat pembayaran (boleh sebagian/DP) selama belum lunas. */
+  canRecordPayment: boolean;
+  /** Riwayat tiap pembayaran honor yang sudah dicatat untuk tahap ini,
+   * terlama ke terbaru — bisa lebih dari satu (misalnya DP lalu pelunasan). */
+  honorPayments: { id: string; jumlahLabel: string; catatan: string | null; oleh: string; tanggalLabel: string }[];
   /** Admin-only: bisa mengedit honor & komponen harga modal tahap ini. */
   canEditCosts: boolean;
   /** Label input harga modal material yang relevan untuk divisi ini (null jika tidak ada). */
@@ -270,9 +320,22 @@ export function buildOrderDetail(orderId: string, user: SessionUser): OrderDetai
     const fotoCount = attachmentsRaw.filter((a) => a.tipe === 'foto').length;
     const isExternal = isStageExternalVendor(s);
     const showHonor = own && isExternal;
-    const honorColors = s.honor_status === 'SUDAH' ? STATUS_COLORS.aman : STATUS_COLORS.mendekati;
+    const honorSisa = Math.max(0, s.honor_jumlah - s.honor_dibayar);
+    const honorLunas = s.honor_jumlah > 0 && s.honor_dibayar >= s.honor_jumlah;
+    const honorBelumSamaSekali = s.honor_dibayar <= 0;
+    const honorStatusLabel = honorLunas ? 'Lunas' : honorBelumSamaSekali ? 'Belum Dibayar' : 'DP Terbayar';
+    const honorColors = honorLunas ? STATUS_COLORS.aman : honorBelumSamaSekali ? STATUS_COLORS.terlambat : STATUS_COLORS.mendekati;
     const canAct = own && s.status === 'BERJALAN';
     const isAdmin = !isVendorUser(user);
+    const honorPayments = showHonor
+      ? listHonorPaymentsForStage(s.id).map((p) => ({
+          id: p.id,
+          jumlahLabel: formatRupiah(p.jumlah),
+          catatan: p.catatan,
+          oleh: p.oleh,
+          tanggalLabel: formatTanggal(p.created_at),
+        }))
+      : [];
     const materialCostLabel =
       s.divisi === 'Cutting & Blacksmith'
         ? 'Harga Modal Material Baja'
@@ -310,10 +373,15 @@ export function buildOrderDetail(orderId: string, user: SessionUser): OrderDetai
       showHonor,
       honorJumlahLabel: formatRupiah(s.honor_jumlah),
       honorJumlahRaw: s.honor_jumlah,
-      honorStatusLabel: s.honor_status === 'SUDAH' ? 'Sudah Dibayar' : 'Belum Dibayar',
+      honorDibayarLabel: formatRupiah(s.honor_dibayar),
+      honorDibayarRaw: s.honor_dibayar,
+      honorSisaLabel: formatRupiah(honorSisa),
+      honorSisaRaw: honorSisa,
+      honorStatusLabel,
       honorBadgeBg: honorColors.bg,
       honorBadgeFg: honorColors.fg,
-      canMarkPaid: isAdmin && isExternal && s.honor_status === 'BELUM',
+      canRecordPayment: isAdmin && isExternal && honorSisa > 0,
+      honorPayments,
       canEditCosts: isAdmin,
       materialCostLabel,
       materialCostRaw: s.material_cost,
@@ -415,8 +483,8 @@ export function buildVendorArchiveStats(): VendorArchiveStat[] {
       if (vendorStages.length === 0) continue;
       jumlahPesanan += 1;
       for (const s of vendorStages) {
-        if (s.honor_status === 'SUDAH') totalSudahDibayar += s.honor_jumlah;
-        else totalBelumDibayar += s.honor_jumlah;
+        totalSudahDibayar += s.honor_dibayar;
+        totalBelumDibayar += Math.max(0, s.honor_jumlah - s.honor_dibayar);
       }
     }
 
@@ -441,17 +509,41 @@ export interface ArchivedOrderView {
   pelanggan: string;
   jumlah: number;
   archivedAtLabel: string;
+  /** ISO mentah (untuk filter rentang tanggal & export CSV) — archivedAtLabel di atas sudah diformat untuk tampilan. */
+  archivedAtRaw: string | null;
 }
 
-export function buildArchivedOrdersList(): ArchivedOrderView[] {
-  return listArchivedOrders().map((o) => ({
-    id: o.id,
-    kode: o.kode,
-    jenis: o.jenis,
-    pelanggan: o.pelanggan,
-    jumlah: o.jumlah,
-    archivedAtLabel: o.archived_at ? formatTanggal(o.archived_at) : '—',
-  }));
+export interface ArchivedOrdersFilter {
+  /** Cocok di kode pesanan ATAU nama pelanggan (case-insensitive, substring). */
+  q?: string;
+  /** Rentang tanggal diarsipkan, format ISO 'YYYY-MM-DD', inklusif di kedua ujung. */
+  dateFrom?: string;
+  dateTo?: string;
+}
+
+/** Daftar pesanan yang sudah diarsipkan, dengan filter pencarian teks
+ * (kode/pelanggan) dan/atau rentang tanggal diarsipkan opsional — dipakai
+ * bersama oleh halaman Arsip (src/app/(app)/arsip/page.tsx) dan endpoint
+ * export CSV-nya supaya logika filternya tidak dobel/berisiko tidak sinkron. */
+export function buildArchivedOrdersList(filter?: ArchivedOrdersFilter): ArchivedOrderView[] {
+  const q = filter?.q?.trim().toLowerCase();
+  return listArchivedOrders()
+    .filter((o) => {
+      if (q && !(o.kode.toLowerCase().includes(q) || o.pelanggan.toLowerCase().includes(q))) return false;
+      const archivedDate = o.archived_at?.slice(0, 10);
+      if (filter?.dateFrom && (!archivedDate || archivedDate < filter.dateFrom)) return false;
+      if (filter?.dateTo && (!archivedDate || archivedDate > filter.dateTo)) return false;
+      return true;
+    })
+    .map((o) => ({
+      id: o.id,
+      kode: o.kode,
+      jenis: o.jenis,
+      pelanggan: o.pelanggan,
+      jumlah: o.jumlah,
+      archivedAtLabel: o.archived_at ? formatTanggal(o.archived_at) : '—',
+      archivedAtRaw: o.archived_at,
+    }));
 }
 
 export { formatTanggal, formatRupiah };

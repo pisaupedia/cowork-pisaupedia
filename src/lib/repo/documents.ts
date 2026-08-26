@@ -53,6 +53,11 @@ export interface DocumentItemInput {
 
 export interface DocumentInput {
   type: DocType;
+  /** Tautan opsional ke pesanan produksi asal — hanya diisi saat dokumen
+   * dibuat lewat tombol "Buat Invoice dari Pesanan Ini" (lihat catatan di
+   * schema.sql). Diabaikan oleh updateDocument (tautan ini tidak diubah
+   * lagi setelah dokumen dibuat). */
+  orderId?: string | null;
   tanggal: string;
   dueDate?: string | null;
   clientName?: string | null;
@@ -115,8 +120,8 @@ export function createDocument(input: DocumentInput, createdBy: string): Documen
     `INSERT INTO documents (
       id, type, nomor, nomor_urut, tanggal, due_date, client_name, client_address, client_contact,
       currency, overall_discount_percent, tax_enabled, tax_percent, grand_total, notes, bank_info, terms,
-      issued_by, driver, sender_name, driver_sign, receiver_name, created_by
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      issued_by, driver, sender_name, driver_sign, receiver_name, order_id, created_by
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   ).run(
     id,
     input.type,
@@ -140,6 +145,7 @@ export function createDocument(input: DocumentInput, createdBy: string): Documen
     input.senderName ?? null,
     input.driverSign ?? null,
     input.receiverName ?? null,
+    input.orderId ?? null,
     createdBy
   );
 

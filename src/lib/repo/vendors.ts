@@ -34,19 +34,35 @@ export function updateVendor(id: string, nama: string, kontak: string | null): v
   db.prepare('UPDATE vendors SET nama = ?, kontak = ? WHERE id = ?').run(nama, kontak, id);
 }
 
-/** Jumlah baris order_stages yang masih menugaskan vendor ini. Dipakai
- * sebagai pengaman sebelum hapus — vendor dengan tugas aktif tidak boleh
- * dihapus begitu saja (selain juga akan gagal karena foreign key). */
+/** Jumlah tahap yang MASIH AKTIF (status bukan 'SELESAI') yang ditugaskan
+ * ke vendor ini — dipakai sebagai pengaman sebelum hapus. Sengaja TIDAK
+ * menghitung tahap yang statusnya sudah 'SELESAI' (baik di pesanan yang
+ * masih berjalan maupun yang sudah diarsipkan): tahap yang sudah selesai
+ * berarti vendor ini sudah tidak ada pekerjaan lagi di tahap itu, jadi
+ * tidak seharusnya menghalangi penghapusan vendor — beda dari versi
+ * sebelumnya yang menghitung SEMUA riwayat tahap (termasuk yang sudah
+ * lama selesai/diarsipkan), sehingga vendor yang pernah mengerjakan apa
+ * pun jadi tidak akan bisa dihapus selamanya. */
 export function countStagesForVendor(id: string): number {
-  const row = db.prepare('SELECT COUNT(*) AS n FROM order_stages WHERE vendor_id = ?').get(id) as { n: number };
+  const row = db
+    .prepare("SELECT COUNT(*) AS n FROM order_stages WHERE vendor_id = ? AND status != 'SELESAI'")
+    .get(id) as { n: number };
   return row.n;
 }
 
 /** Hapus vendor beserta akun-akun login-nya. Hanya aman dipanggil setelah
- * memastikan countStagesForVendor(id) === 0 (dicek di action layer) —
- * kalau masih ada order_stages yang menugaskan vendor ini, hapus akan
- * gagal karena foreign key (order_stages.vendor_id REFERENCES vendors). */
+ * memastikan countStagesForVendor(id) === 0 (dicek di action layer) — yang
+ * artinya tidak ada tahap AKTIF yang masih ditugaskan ke vendor ini. Tahap
+ * lama yang sudah 'SELESAI' tetap boleh ada (dan tetap tersimpan datanya:
+ * divisi, status, honor, komponen harga modal) — vendor_id-nya di-NULL-kan
+ * dulu di sini supaya tidak melanggar foreign key
+ * (order_stages.vendor_id REFERENCES vendors) saat vendor ini dihapus.
+ * Konsekuensinya: "Pelaksana" pada tahap lama itu akan tampil kosong
+ * setelah vendornya dihapus — sama seperti sudah tidak ada vendor
+ * ditugaskan, riwayat catatan/lampiran/foto tetap tersimpan seperti biasa. */
 export function deleteVendor(id: string): void {
+  db.prepare('UPDATE order_stages SET vendor_id = NULL WHERE vendor_id = ?').run(id);
+
   const userIds = (db.prepare('SELECT id FROM users WHERE vendor_id = ?').all(id) as { id: string }[]).map(
     (r) => r.id
   );

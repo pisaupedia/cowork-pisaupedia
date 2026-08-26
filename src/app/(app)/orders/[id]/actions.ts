@@ -2,17 +2,22 @@
 
 import path from 'node:path';
 import fs from 'node:fs/promises';
+import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
-import { requireUser } from '@/lib/session';
-import { getStageById, setStageStatus, countAttachmentsForStage } from '@/lib/repo/stages';
+import { requireUser, requireAdmin } from '@/lib/session';
+import { getStageById, setStageStatus, countAttachmentsForStage, reassignStageVendor } from '@/lib/repo/stages';
 import { addAttachment } from '@/lib/repo/attachments';
 import { addNote } from '@/lib/repo/notes';
-import { setStageHonorPaid, updateStageCosts } from '@/lib/repo/stages';
+import { recordHonorPayment, updateStageCosts } from '@/lib/repo/stages';
 import { addDesignPhoto } from '@/lib/repo/designPhotos';
-import { getOrderById } from '@/lib/repo/orders';
+import { getOrderById, updateOrder, type UpdateOrderInput } from '@/lib/repo/orders';
+import { getVendorById } from '@/lib/repo/vendors';
 import { isStageOwn } from '@/lib/view';
 import { uploadsDir } from '@/lib/db';
 import { db } from '@/lib/db';
+import { logAudit } from '@/lib/repo/auditLog';
+import { formatRupiah, formatTanggal } from '@/lib/derive';
+import { setFlash } from '@/lib/flash';
 
 const MAX_FILE_BYTES = 8 * 1024 * 1024;
 const ALLOWED_EXT = new Set(['.jpg', '.jpeg', '.png', '.webp', '.pdf', '.txt', '.doc', '.docx']);
@@ -87,20 +92,30 @@ export async function markCompleteAction(formData: FormData): Promise<void> {
     .get(stage.order_id, stage.urutan + 1) as { id: string } | undefined;
   if (next) setStageStatus(next.id, 'BERJALAN');
 
+  await setFlash('success', `Tahap ${stage.divisi} ditandai selesai.`);
   revalidateOrder(stageId);
 }
 
-export async function markPaidAction(formData: FormData): Promise<void> {
+/** Admin mencatat pembayaran honor vendor untuk tahap ini — boleh berupa DP
+ * (sebagian dari total) dan dipanggil berkali-kali sampai lunas, masing-
+ * masing tercatat sebagai satu baris riwayat (dengan catatan opsional,
+ * misalnya "DP"/"Pelunasan") — lihat recordHonorPayment di
+ * src/lib/repo/stages.ts untuk akumulasi & pencatatan riwayatnya. */
+export async function recordHonorPaymentAction(formData: FormData): Promise<void> {
   const user = await requireUser();
   if (user.role !== 'ADMIN') throw new Error('Forbidden: khusus admin.');
   const stageId = String(formData.get('stageId') ?? '');
+  const jumlahBayar = Number(formData.get('jumlahBayar') ?? 0);
+  const catatan = String(formData.get('catatanBayar') ?? '').trim() || null;
 
   const stage = getStageById(stageId);
   if (!stage) throw new Error('Tahap tidak ditemukan.');
   if (!stage.vendor_id || stage.vendor_is_internal === 1) throw new Error('Tahap ini tidak memiliki honor vendor eksternal.');
-  if (stage.honor_status === 'SUDAH') return;
+  if (!Number.isFinite(jumlahBayar) || jumlahBayar <= 0) throw new Error('Jumlah pembayaran harus lebih dari 0.');
+  if (stage.honor_dibayar >= stage.honor_jumlah) return;
 
-  setStageHonorPaid(stageId);
+  recordHonorPayment(stageId, jumlahBayar, catatan, user.name);
+  await setFlash('success', `Pembayaran ${formatRupiah(jumlahBayar)} untuk tahap ${stage.divisi} berhasil dicatat.`);
   revalidateOrder(stageId);
 }
 
@@ -117,14 +132,144 @@ export async function updateStageCostAction(formData: FormData): Promise<void> {
   const shippingRaw = formData.get('shippingCost');
   const extraRaw = formData.get('extraCost');
 
-  updateStageCosts(stageId, {
-    honorJumlah: honorRaw !== null ? Number(honorRaw) || 0 : undefined,
-    materialCost: materialRaw !== null ? Number(materialRaw) || 0 : undefined,
-    shippingCost: shippingRaw !== null ? Number(shippingRaw) || 0 : undefined,
-    extraCost: extraRaw !== null ? Number(extraRaw) || 0 : undefined,
-  });
+  const next = {
+    honorJumlah: honorRaw !== null ? Math.max(0, Number(honorRaw) || 0) : undefined,
+    materialCost: materialRaw !== null ? Math.max(0, Number(materialRaw) || 0) : undefined,
+    shippingCost: shippingRaw !== null ? Math.max(0, Number(shippingRaw) || 0) : undefined,
+    extraCost: extraRaw !== null ? Math.max(0, Number(extraRaw) || 0) : undefined,
+  };
 
+  const changes: string[] = [];
+  if (next.honorJumlah !== undefined && next.honorJumlah !== stage.honor_jumlah) {
+    changes.push(`Honor Vendor: ${formatRupiah(stage.honor_jumlah)} -> ${formatRupiah(next.honorJumlah)}`);
+  }
+  if (next.materialCost !== undefined && next.materialCost !== stage.material_cost) {
+    changes.push(`Harga Modal Material: ${formatRupiah(stage.material_cost)} -> ${formatRupiah(next.materialCost)}`);
+  }
+  if (next.shippingCost !== undefined && next.shippingCost !== stage.shipping_cost) {
+    changes.push(`Harga Shipping: ${formatRupiah(stage.shipping_cost)} -> ${formatRupiah(next.shippingCost)}`);
+  }
+  if (next.extraCost !== undefined && next.extraCost !== stage.extra_cost) {
+    changes.push(`Extra Cost: ${formatRupiah(stage.extra_cost)} -> ${formatRupiah(next.extraCost)}`);
+  }
+
+  updateStageCosts(stageId, next);
+
+  if (changes.length > 0) {
+    logAudit({
+      entityType: 'stage',
+      entityId: stageId,
+      action: 'edit_biaya',
+      detail: `${stage.divisi}: ${changes.join('; ')}`,
+      oleh: user.name,
+    });
+  }
+
+  await setFlash('success', 'Perubahan honor/harga modal berhasil disimpan.');
   revalidateOrder(stageId);
+}
+
+/** Admin memindahkan tugas satu tahap ke vendor lain (atau melepas
+ * penugasan). Riwayat pembayaran & catatan tahap ini tidak berubah — lihat
+ * reassignStageVendor di src/lib/repo/stages.ts. */
+export async function reassignVendorAction(formData: FormData): Promise<void> {
+  const user = await requireAdmin();
+  const stageId = String(formData.get('stageId') ?? '');
+  const newVendorId = String(formData.get('vendorId') ?? '').trim() || null;
+
+  const stage = getStageById(stageId);
+  if (!stage) throw new Error('Tahap tidak ditemukan.');
+
+  const oldVendorName = stage.vendor_nama ?? '(belum ditugaskan)';
+  const newVendor = newVendorId ? getVendorById(newVendorId) : null;
+  if (newVendorId && !newVendor) throw new Error('Vendor tujuan tidak ditemukan.');
+  const newVendorName = newVendor?.nama ?? '(dilepas, tidak ditugaskan)';
+
+  if (stage.vendor_id === newVendorId) return;
+
+  reassignStageVendor(stageId, newVendorId);
+  logAudit({
+    entityType: 'stage',
+    entityId: stageId,
+    action: 'ganti_vendor',
+    detail: `${stage.divisi}: ${oldVendorName} -> ${newVendorName}`,
+    oleh: user.name,
+  });
+  await setFlash('success', `Tahap ${stage.divisi} kini ditugaskan ke ${newVendorName}.`);
+  revalidateOrder(stageId);
+}
+
+/** Admin mengubah data dasar pesanan (jenis, pelanggan, kontak, jumlah,
+ * harga, tanggal masuk, deadline, catatan) — lihat updateOrder di
+ * src/lib/repo/orders.ts. Setiap field yang benar-benar berubah dicatat ke
+ * audit_log satu-satu supaya riwayatnya mudah dibaca. */
+export async function updateOrderAction(formData: FormData): Promise<void> {
+  const user = await requireAdmin();
+  const orderId = String(formData.get('orderId') ?? '');
+  const order = getOrderById(orderId);
+  if (!order) throw new Error('Pesanan tidak ditemukan.');
+
+  const input: UpdateOrderInput = {
+    jenis: String(formData.get('jenis') ?? '').trim(),
+    pelanggan: String(formData.get('pelanggan') ?? '').trim(),
+    kontak: String(formData.get('kontak') ?? '').trim() || null,
+    jumlah: Number(formData.get('jumlah') ?? 0),
+    harga: Number(formData.get('harga') ?? 0),
+    tanggalMasuk: String(formData.get('tanggalMasuk') ?? ''),
+    deadline: String(formData.get('deadline') ?? ''),
+    catatan: String(formData.get('catatan') ?? '').trim() || null,
+  };
+
+  if (!input.jenis || !input.pelanggan || !input.tanggalMasuk || !input.deadline) {
+    throw new Error('Jenis pisau, nama pelanggan, tanggal masuk, dan deadline wajib diisi.');
+  }
+  if (!Number.isFinite(input.jumlah) || input.jumlah <= 0) {
+    throw new Error('Jumlah unit harus lebih dari 0.');
+  }
+  if (!Number.isFinite(input.harga) || input.harga < 0) {
+    throw new Error('Harga jual tidak boleh negatif.');
+  }
+  if (input.deadline < input.tanggalMasuk) {
+    throw new Error('Deadline tidak boleh lebih awal dari tanggal masuk.');
+  }
+
+  const changes: string[] = [];
+  if (input.jenis !== order.jenis) changes.push(`Jenis: ${order.jenis} -> ${input.jenis}`);
+  if (input.pelanggan !== order.pelanggan) changes.push(`Pelanggan: ${order.pelanggan} -> ${input.pelanggan}`);
+  if ((input.kontak ?? '') !== (order.kontak ?? '')) {
+    changes.push(`Kontak: ${order.kontak ?? '—'} -> ${input.kontak ?? '—'}`);
+  }
+  if (input.jumlah !== order.jumlah) changes.push(`Jumlah: ${order.jumlah} -> ${input.jumlah}`);
+  if (input.harga !== order.harga) changes.push(`Harga Jual: ${formatRupiah(order.harga)} -> ${formatRupiah(input.harga)}`);
+  if (input.tanggalMasuk !== order.tanggal_masuk) {
+    changes.push(`Tanggal Masuk: ${formatTanggal(order.tanggal_masuk)} -> ${formatTanggal(input.tanggalMasuk)}`);
+  }
+  if (input.deadline !== order.deadline) {
+    changes.push(`Deadline: ${formatTanggal(order.deadline)} -> ${formatTanggal(input.deadline)}`);
+  }
+  if ((input.catatan ?? '') !== (order.catatan ?? '')) changes.push('Catatan/Rincian Pekerjaan diubah');
+
+  updateOrder(orderId, input);
+
+  if (changes.length > 0) {
+    logAudit({ entityType: 'order', entityId: orderId, action: 'edit_pesanan', detail: changes.join('; '), oleh: user.name });
+  }
+
+  revalidatePath(`/orders/${orderId}`);
+  revalidatePath('/dashboard');
+  revalidatePath('/kanban');
+  revalidatePath('/kalender');
+  revalidatePath('/arsip');
+  // Halaman edit meredirect BALIK ke halaman detail pesanan — beda dari
+  // aksi lain di aplikasi ini yang tetap di halaman yang sama (cukup
+  // revalidatePath tanpa redirect), jadi notifikasi "berhasil disimpan" di
+  // sini TIDAK dipasok lewat cookie flash (lihat src/lib/flash.ts) seperti
+  // aksi lain — cookie yang diset lalu langsung redirect ke halaman LAIN
+  // berisiko dibaca dari cache Next.js yang belum tahu soal cookie barunya
+  // (layout di-cache per rute oleh router). Dipasok lewat query `?flash=`
+  // sebagai gantinya (dibaca langsung oleh halaman tujuan, bukan lewat
+  // cache) — lihat pemakaiannya di src/app/(app)/orders/[id]/page.tsx.
+  redirect(`/orders/${orderId}?flash=${encodeURIComponent(`Pesanan ${order.kode} berhasil diperbarui.`)}`);
 }
 
 /** Admin-only: menambah foto desain pisau tambahan kapan saja setelah pesanan
@@ -162,6 +307,7 @@ export async function addDesignPhotosAction(formData: FormData): Promise<void> {
     });
   }
 
+  await setFlash('success', `${files.length} foto desain berhasil ditambahkan.`);
   revalidatePath(`/orders/${orderId}`);
 }
 

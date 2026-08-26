@@ -43,9 +43,12 @@ export async function createDocumentAction(formData: FormData): Promise<void> {
   const items = parseItems(String(formData.get('itemsJson') ?? '[]'));
   if (items.length === 0) throw new Error('Minimal satu item harus diisi.');
 
+  const orderId = String(formData.get('orderId') ?? '').trim() || null;
+
   const doc = createDocument(
     {
       type,
+      orderId,
       tanggal,
       dueDate: type === 'invoice' ? String(formData.get('dueDate') ?? '') || null : null,
       clientName: String(formData.get('clientName') ?? '').trim() || null,

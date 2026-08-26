@@ -102,11 +102,25 @@ npm run start
   harga shipping & "Extra Cost" (Selesai Produksi). Semua angka ini bisa
   diubah lagi kapan saja dari halaman detail pesanan → tab "Riwayat Tahap
   & Catatan" → buka bagian "Edit Honor & Harga Modal (admin)" di tahap yang
-  bersangkutan. Admin bisa menandai honor sudah dibayar; vendor bisa
-  melihat nominal & status honornya sendiri tapi tidak bisa mengubah
-  apa pun. Semua angka ini (honor + material + shipping + extra cost)
+  bersangkutan. Semua angka ini (honor + material + shipping + extra cost)
   digabung otomatis menjadi **Harga Modal (Total)** yang tampil di tab
   Ringkasan pesanan — khusus admin, tidak pernah terlihat oleh vendor.
+- **Pembayaran honor vendor bisa dicicil/DP, tidak harus lunas sekaligus** —
+  setiap tahap yang dikerjakan vendor eksternal menampilkan "Total
+  Pembayaran" (honor yang disepakati) dan "Sudah Dibayarkan" (akumulasi
+  yang sudah dibayar), plus sisa yang belum dibayar dan badge status
+  (Belum Dibayar / DP Terbayar / Lunas). Ini untuk kasus vendor yang minta
+  dibayar sebagian dulu (down payment) sebelum lanjut kerja: admin cukup
+  mencatat nominal yang dibayarkan lewat form "Catat Pembayaran" di tab
+  "Riwayat Tahap & Catatan" (default-nya sisa yang belum dibayar, tapi bisa
+  diubah untuk mencatat DP), plus catatan opsional (misalnya "DP" atau
+  "Pelunasan") untuk menandai pembayaran itu — dan bisa dipanggil
+  berkali-kali sampai lunas. Setiap pembayaran (bukan cuma totalnya)
+  tersimpan sebagai satu baris riwayat di tabel `honor_payments`, tampil
+  sebagai daftar "Riwayat Pembayaran (N)" (bisa dibuka/tutup) di bawah form
+  tersebut — berisi nominal, catatan, tanggal, dan siapa yang mencatatnya.
+  Vendor bisa melihat nominal & status pembayarannya sendiri (termasuk
+  riwayatnya) tapi tidak bisa mengubah apa pun.
 - **Laporan Riwayat** — tab khusus admin yang hanya muncul untuk pesanan
   yang seluruh 4 tahapnya sudah "Selesai", berisi ringkasan foto/dokumen/
   catatan/total honor/total harga modal dari awal sampai akhir.
@@ -116,15 +130,30 @@ npm run start
   halaman lain — bukan lewat folder publik.
 - **Admin bisa membuat pesanan baru & vendor/pengguna baru** langsung dari
   aplikasi (menu "Pesanan Baru" dan "Vendor & Pengguna").
+- **Catatan / Rincian Pekerjaan (opsional)** — kolom teks bebas di form
+  "Pesanan Baru", di bawah field jenis/pelanggan/harga/tanggal, untuk
+  rincian tambahan yang tidak tercakup kolom lain (ukuran, jenis bahan,
+  dst.). Beda dari catatan alasan pesanan custom di bawahnya (yang khusus
+  untuk ditinjau admin/sales) — dua kolom ini independen, keduanya selalu
+  terlihat di form terlepas dari centang "Pesanan custom" dicek atau
+  tidak. Kalau diisi, tampil di tab "Ringkasan" halaman detail pesanan,
+  terlihat oleh semua yang boleh melihat pesanan itu (admin & vendor yang
+  terlibat).
 - **Foto desain pisau (referensi) yang terlihat SEMUA divisi** — saat
   membuat pesanan baru (menu "Pesanan Baru"), admin wajib mengunggah
-  minimal 3 foto desain/referensi pisau yang dipesan. Berbeda dari foto
-  bukti pengerjaan per tahap (yang hanya terlihat oleh vendor pemilik
-  tahap itu), foto desain ini langsung terlihat oleh SEMUA divisi/vendor
-  yang mengerjakan pesanan tersebut — tujuannya menyamakan pemahaman
-  semua tim mengenai desain pisau sebelum mulai bekerja. Foto ini
-  ditampilkan sebagai galeri di halaman detail pesanan, selalu terlihat di
-  atas tab-tab lain (tidak perlu diklik dulu). Admin bisa menambah foto
+  minimal 1 foto desain/referensi pisau yang dipesan, lewat 4 slot bertanda
+  "Tampak Depan/Belakang/Samping/Atas" (kotak putus-putus "+ Upload" yang
+  langsung menampilkan thumbnail begitu foto dipilih) — supaya admin
+  diarahkan mengambil foto dari sudut yang lengkap, tapi tidak wajib
+  mengisi keempatnya. Slot mana yang diisi hanya panduan visual; semua
+  foto tetap dikirim & disimpan dengan cara yang sama, tidak dibedakan per
+  "tampak" di data. Berbeda dari foto bukti pengerjaan per tahap (yang
+  hanya terlihat oleh vendor pemilik tahap itu), foto desain ini langsung
+  terlihat oleh SEMUA divisi/vendor yang mengerjakan pesanan tersebut —
+  tujuannya menyamakan pemahaman semua tim mengenai desain pisau sebelum
+  mulai bekerja. Foto ini ditampilkan sebagai galeri di halaman detail
+  pesanan, selalu terlihat di atas tab-tab lain (tidak perlu diklik
+  dulu). Admin bisa menambah foto
   desain lagi kapan saja dari halaman detail pesanan (tidak ada minimal
   untuk penambahan susulan). **Foto pertama juga muncul sebagai thumbnail
   kecil langsung di kartu pesanan** pada Dashboard ("Perlu Perhatian"),
@@ -148,22 +177,63 @@ npm run start
   ini tidak mengirim email/SMS otomatis. Vendor sendiri tidak punya menu
   ganti password sendiri di aplikasi ini; semua lewat admin.
 - **Admin bisa mengedit dan menghapus vendor maupun akun login-nya** — di
-  menu "Vendor & Pengguna": "Edit Vendor" mengubah nama/kontak, "Edit Akun"
-  mengubah username/nama tampilan akun login, dan masing-masing punya tombol
-  hapus sendiri (memakai popup kode konfirmasi yang sama seperti penghapusan
-  dokumen di modul Invoice). Vendor yang masih ditugaskan di satu atau lebih
-  tahap pesanan (`order_stages`) ditandai "Ditugaskan (N) — tidak bisa
-  dihapus" dan tombol hapusnya disembunyikan — harus dilepas dari semua
-  tugasnya dulu. Menghapus akun login tidak menghapus riwayat lama (catatan,
-  lampiran, foto desain yang pernah dibuat akun itu) karena kolom
-  `penulis`/`oleh` di tabel-tabel tersebut hanya menyimpan nama sebagai teks,
-  bukan foreign key ke akun.
+  menu "Vendor & Pengguna", satu toggle "Edit Vendor & Akun" per vendor
+  mengubah nama/kontak vendor SEKALIGUS username akun login-nya dalam satu
+  form yang sama (bukan dua form terpisah) — karena setiap vendor hanya
+  punya satu akun. Nama vendor dan nama akun juga digabung jadi SATU field
+  ("Nama Vendor / Akun", bukan dua field "Nama Vendor" & "Nama Akun"
+  terpisah) supaya keduanya selalu sama — sesuai kondisi aslinya waktu
+  vendor pertama dibuat. Kalau vendor itu belum/tidak punya akun (misalnya
+  akunnya sudah dihapus), form ini otomatis hanya menampilkan field
+  nama/kontak vendor tanpa field akun (username). Vendor maupun akun login masing-
+  masing punya tombol hapus sendiri (memakai popup kode konfirmasi yang
+  sama seperti penghapusan dokumen di modul Invoice). Vendor yang masih
+  ditugaskan pada satu atau lebih tahap yang BELUM SELESAI ditandai
+  "Ditugaskan (N) — tidak bisa dihapus" dan tombol hapusnya disembunyikan
+  — harus diselesaikan/dilepas dari tugas aktifnya dulu. Tahap lama yang
+  sudah "Selesai" (termasuk yang pesanannya sudah diarsipkan) TIDAK
+  dihitung sebagai penghalang — sebelumnya dihitung juga, sehingga vendor
+  yang pernah mengerjakan pekerjaan apa pun jadi tidak akan pernah bisa
+  dihapus meski semua tugasnya sudah lama selesai (bug, sudah diperbaiki).
+  Saat vendor benar-benar dihapus, `vendor_id` pada tahap-tahap lamanya
+  yang sudah selesai itu di-kosongkan (bukan dihapus barisnya) supaya
+  tidak melanggar foreign key — datanya (divisi, honor, dst.) tetap
+  tersimpan, hanya kolom "Pelaksana"-nya jadi kosong. Menghapus akun login
+  tidak menghapus riwayat lama (catatan, lampiran, foto desain yang pernah
+  dibuat akun itu) karena kolom `penulis`/`oleh` di tabel-tabel tersebut
+  hanya menyimpan nama sebagai teks, bukan foreign key ke akun.
+- **Dashboard "Perlu Perhatian" menampilkan SEMUA pesanan aktif kecuali
+  yang sudah di divisi "Selesai Produksi" (bukan hanya yang berisiko),
+  dengan tombol hapus per pesanan** — sebelumnya daftar ini hanya berisi
+  pesanan yang mendekati/lewat deadline (pesanan "aman" tidak ditampilkan
+  sama sekali). Sekarang daftar ini menampilkan seluruh pesanan aktif yang
+  terlihat oleh user itu, KECUALI yang sudah berada di divisi "Selesai
+  Produksi" (pesanan di divisi itu sudah di ujung alur produksi, jadi
+  tidak perlu ikut nongkrong di sini — cek jumlahnya lewat kartu statistik
+  "Selesai Produksi" di atasnya, atau papan Kanban), tetap diurutkan
+  terlambat → mendekati deadline → aman supaya yang paling butuh perhatian
+  tetap di atas. Setiap kartu pesanan di daftar ini juga punya tombol
+  "🗑 Hapus" (admin-only — vendor tidak pernah melihat tombol ini),
+  memakai popup kode konfirmasi yang sama seperti penghapusan lain di
+  aplikasi ini. Beda dari "Arsipkan" (yang hanya menyembunyikan pesanan,
+  data tetap ada dan bisa dikembalikan dari menu Arsip), tombol ini
+  **menghapus pesanan secara permanen**: seluruh baris tahap, catatan,
+  lampiran, dan foto desainnya di database, SEKALIGUS folder fisiknya di
+  `uploads/` (folder per tahap dan folder `design/<orderId>/`) — tidak
+  bisa dikembalikan lagi setelah dihapus.
 - **Dashboard, Papan Kanban, dan Kalender Deadline** — semuanya dihitung
   dari data pesanan yang sama secara real-time, bukan data statis. Kalender
   sudah dirapikan untuk layar kecil: sel tanggal dan tombol navigasi
   bulan punya target sentuh yang lebih besar, dan kode pesanan pada sel
   tanggal disingkat jadi badge jumlah ("● 2") di layar sempit lalu muncul
   penuh lagi mulai lebar tablet (`sm:`) ke atas.
+- **Warna identitas per divisi** — label "Distribusi per Divisi" di
+  Dashboard (teks & bar) dan judul kolom di Papan Kanban sekarang berwarna
+  sesuai divisinya: Cutting & Blacksmith merah, Shaping & Heat Threatment
+  kuning, Handle & Cover coklat, Selesai Produksi hijau — supaya keempat
+  divisi langsung dikenali dari warnanya di kedua halaman itu. Kode: map
+  warna `DIVISION_COLORS` di `src/lib/constants.ts`, dipakai di
+  `src/app/(app)/dashboard/page.tsx` dan `src/app/(app)/kanban/page.tsx`.
 - **Modul "Invoice & Dokumen"** — pembuatan Invoice, Quotation, dan Delivery
   Note (Surat Jalan), tersimpan sungguhan di database yang sama dengan data
   produksi (bukan lagi hanya di memori browser). Lihat bagian khusus di
@@ -302,6 +372,16 @@ masih bisa dibuka langsung dari halaman Arsip lewat tombol "Lihat Detail",
 dan bisa dikembalikan ke tampilan aktif kapan saja lewat tombol "Batalkan
 Arsip" kalau ternyata salah klik.
 
+**Menghapus pesanan yang sudah diarsipkan** — tiap pesanan di daftar Arsip
+juga punya tombol "Hapus Permanen" (popup kode konfirmasi yang sama seperti
+penghapusan lain di aplikasi ini) untuk pesanan yang datanya memang sudah
+tidak diperlukan lagi, bukan cuma disembunyikan. Ini memakai action hapus
+permanen yang sama dengan yang di Dashboard (`deleteOrderAction`, lihat
+"Dashboard 'Perlu Perhatian'" di atas) — seluruh tahap, catatan, lampiran,
+riwayat pembayaran honor, dan foto desainnya (baris database maupun file
+fisiknya) ikut terhapus dan **tidak bisa dikembalikan**, beda dari
+"Batalkan Arsip" yang cuma memindahkan kembali ke tampilan aktif.
+
 **Statistik Pembayaran Vendor** — di bagian atas halaman Arsip, ada tabel
 ringkasan per vendor eksternal: berapa kali vendor tersebut dilibatkan di
 pesanan yang **sudah diarsipkan** (dihitung per pesanan, bukan per tahap —
@@ -334,6 +414,155 @@ Jika ketiga hal ini penting untuk dipakai sungguhan di lapangan (misalnya
 vendor sering bekerja di lokasi dengan sinyal lemah), langkah selanjutnya
 yang disarankan adalah membangun companion app mobile (React Native/Flutter)
 khusus untuk alur unggah foto vendor, yang bicara ke API yang sama.
+
+## Pembaruan besar (24 Agustus 2026) — implementasi hasil Review Profesional
+
+Setelah `REVIEW-PROFESIONAL.md` diselesaikan, hampir seluruh rekomendasinya
+diimplementasikan pada sesi yang sama. Bagian ini merangkum apa yang baru;
+lihat `REVIEW-PROFESIONAL.md` untuk detail temuan aslinya dan status
+per-butirnya.
+
+### Edit pesanan & audit trail
+
+- **Edit pesanan pasca-dibuat** — tombol "✎ Edit Pesanan" (admin-only) di
+  halaman detail pesanan membuka `/orders/[id]/edit`, form untuk
+  jenis/pelanggan/kontak/jumlah/harga/tanggal masuk/deadline/catatan.
+  Kode pesanan, status approval, vendor per tahap, dan biaya per tahap
+  **tidak** diedit lewat form ini (masing-masing punya jalur edit sendiri
+  yang sudah ada, supaya log audit tetap rapi dan bermakna per jenis
+  perubahan). Server memvalidasi jumlah > 0, harga ≥ 0, dan deadline tidak
+  boleh lebih awal dari tanggal masuk.
+- **Log audit** (`audit_log`) — setiap perubahan pesanan, perubahan
+  honor/harga modal per tahap, pergantian vendor pelaksana, dan keputusan
+  approval (setuju/tolak/ajukan-ulang) tercatat: siapa, kapan, aksi apa,
+  dan ringkasan nilai lama → baru. Belum ada halaman UI khusus untuk
+  menampilkan log ini (baru tersimpan di database) — bisa ditambahkan
+  kalau nanti dibutuhkan tampilan riwayat perubahan secara langsung.
+- **Alasan tolak & ajukan ulang** — menolak pesanan di halaman Persetujuan
+  sekarang mewajibkan mengisi alasan (tersimpan di `orders.reject_reason`).
+  Pesanan yang ditolak menampilkan banner alasan di halaman detailnya, dan
+  admin bisa merevisi datanya (lewat halaman edit) lalu klik "Ajukan Ulang"
+  supaya pesanan kembali masuk status menunggu approval — tidak lagi jalan
+  buntu.
+- **Transaksi database** — pembuatan pesanan baru (insert pesanan + 4 baris
+  tahap) dan penghapusan pesanan (semua tabel terkait) sekarang dibungkus
+  transaksi `BEGIN`/`COMMIT`/`ROLLBACK`, supaya tidak ada kondisi
+  setengah-jadi kalau terjadi error di tengah proses.
+
+### Backup otomatis
+
+- Backup database berjalan otomatis setiap hari (mulai 1 menit setelah
+  server dinyalakan, lalu setiap 24 jam), tersimpan di
+  `data/auto-backups/` dengan retensi 14 backup terakhir (yang lebih lama
+  otomatis terhapus). Kalau proses backup gagal, error-nya dicatat ke log
+  server tapi tidak menghentikan aplikasi.
+- Halaman "Backup & Restore" menampilkan daftar backup otomatis (tanggal,
+  ukuran, tombol unduh per file) dan tombol "Jalankan Backup Sekarang"
+  untuk memicu manual di luar jadwal.
+- Backup manual (unduh/restore) yang sudah ada sebelumnya tidak berubah.
+
+### Admin kedua & manajemen akun admin
+
+- Bagian baru "Akun Admin" di halaman "Vendor & Pengguna": admin bisa
+  membuat akun admin baru, reset password admin lain, dan menghapus akun
+  admin. Menghapus admin terakhir yang tersisa **tidak diizinkan** (server
+  menolak dengan pesan error) — supaya tidak ada skenario kehilangan
+  seluruh akses admin ke aplikasi.
+
+### Ganti vendor pelaksana
+
+- Setiap tahap di halaman detail pesanan punya bagian "Ganti Vendor
+  Pelaksana" (admin-only, bisa dibuka/tutup) untuk memindahkan tahap ke
+  vendor lain (atau melepas penugasan) tanpa menyentuh riwayat pembayaran
+  honor, catatan, atau lampiran yang sudah tercatat di tahap itu.
+
+### Pencarian, filter & export CSV
+
+- Dashboard ("Perlu Perhatian") dan Arsip punya kotak pencarian
+  kode/nama pelanggan. Arsip juga punya filter rentang tanggal diarsipkan.
+- Tombol "Export CSV" di halaman Arsip: satu untuk daftar pesanan
+  diarsipkan (mengikuti filter yang aktif), satu untuk statistik
+  pembayaran per vendor. File CSV memakai BOM UTF-8 supaya nama dengan
+  karakter khusus tetap terbaca benar saat dibuka di Excel.
+
+### Notifikasi & indikator loading
+
+- **Toast konfirmasi** — banner hijau muncul otomatis setelah aksi
+  berhasil (edit pesanan, catat pembayaran, tandai tahap selesai, ganti
+  vendor, setuju/tolak pesanan, dll.), hilang otomatis setelah beberapa
+  detik atau bisa ditutup manual.
+- **Error boundary ramah** — kalau terjadi error di server (misalnya
+  validasi gagal), pengguna melihat pesan singkat dengan tombol "Coba
+  Lagi", bukan halaman crash teknis bawaan Next.js.
+- **Tombol submit dinonaktifkan saat memproses** (`<SubmitButton>`,
+  berbasis `useFormStatus`) di semua form penting — mencegah submit dobel
+  kalau pengguna mengklik berkali-kali pada koneksi lambat.
+- **Belum dikerjakan (sengaja):** notifikasi WhatsApp/email untuk deadline
+  mendekat — ini butuh kredensial/akun layanan pihak ketiga (WhatsApp
+  Business API, SMTP, dll.) yang belum tersedia untuk aplikasi ini.
+
+### Invoice terhubung ke data pesanan
+
+- Tombol "🧾 Buat Invoice dari Pesanan Ini" di halaman detail pesanan
+  membuka form dokumen baru dengan nama pelanggan, jenis, dan jumlah sudah
+  terisi otomatis dari data pesanan, dan tersimpan dengan `order_id` yang
+  menghubungkannya balik ke pesanan asal. Halaman daftar Invoice &
+  Dokumen menampilkan link "Source Order" untuk dokumen yang dibuat lewat
+  jalur ini.
+- **Catatan penting:** bahasa Inggris dan gaya visual non-Tailwind pada
+  modul Invoice & Dokumen **tidak diubah** — ini keputusan desain yang
+  sengaja diminta pengguna sebelumnya (lihat bagian "Modul Invoice,
+  Quotation & Delivery Note" di atas), bukan sesuatu yang perlu
+  diseragamkan.
+
+### Konsistensi tampilan
+
+- Warna divisi "Cutting & Blacksmith" diganti dari merah menjadi
+  rose/magenta (`DIVISION_COLORS`, `src/lib/constants.ts`) supaya tidak
+  lagi bertabrakan secara visual dengan warna status "Terlambat" — status
+  terlambat sekarang satu-satunya elemen berwarna merah di aplikasi.
+- Kontras teks kecil dinaikkan (`text-black/45` → `/55`, `/40` → `/50`) di
+  seluruh halaman utama.
+- Halaman Persetujuan dan filter Arsip dirapikan responsivitasnya untuk
+  layar mobile.
+- Tautan "kembali" di halaman detail pesanan sekarang mengarah ke halaman
+  asal yang benar (Dashboard/Kanban/Kalender/Arsip/Persetujuan) lewat
+  parameter `?from=`, bukan selalu ke Dashboard.
+- Panel "Distribusi per Divisi" di Dashboard diganti panel "Ringkasan
+  Honor Anda" untuk akun vendor yang datanya hanya ada di satu divisi
+  (panel distribusi tetap tampil seperti biasa untuk admin/owner dan
+  vendor multi-divisi).
+
+### Pembaruan susulan (24 Agustus 2026) — tata letak dokumen & upload foto
+
+Dua penyesuaian lagi berdasarkan masukan langsung setelah pembaruan besar
+di atas dikirim:
+
+- **Kop surat & blok alamat modul Invoice & Dokumen dirapikan.** Header
+  (logo, nama perusahaan, nomor/tanggal dokumen) dan blok "Bill To"/"Quote
+  To"/"Deliver To" sebelumnya memakan banyak ruang vertikal dan — khusus
+  untuk Invoice/Quotation yang cuma punya satu blok alamat — melebar
+  mengisi seluruh sisa lebar dokumen sampai ke kanan. Sekarang jarak
+  antar-baris dipadatkan, lebar blok alamat dibatasi (~320px), dan pada
+  Invoice/Quotation, pemilih mata uang ("Currency") ditaruh sebaris di
+  sebelah kanan blok alamat alih-alih menggantung sendirian di bawahnya —
+  mengikuti tata letak aplikasi invoice standalone asli milik pengguna
+  (dikonfirmasi langsung dari cuplikan layarnya). Bahasa Inggris & gaya
+  visual modul ini tetap tidak diubah (lihat catatan di atas). Kode:
+  `src/app/(app)/invoices/invoice-theme.css`, prop `billTo` baru di
+  `src/components/invoice/DocumentEditor.tsx` yang dipakai oleh
+  `src/app/(app)/invoices/new/page.tsx` dan `.../[id]/page.tsx`.
+- **Kotak upload foto bergaya dropzone**, bukan `<input type="file">`
+  polos bawaan browser ("Choose File / No file chosen") — dipakai ulang
+  dari pola yang sudah ada di form foto desain pesanan baru (kotak
+  putus-putus "+ Upload" yang berganti jadi thumbnail preview begitu foto
+  dipilih). Diterapkan di dua tempat: upload foto bukti per tahap (di tab
+  "Riwayat Tahap & Catatan") dan "+ Tambah Foto Desain" susulan di detail
+  pesanan (yang mendukung pilih banyak foto sekaligus, dengan badge "+N"
+  di kotaknya kalau lebih dari satu foto dipilih). Komponen baru:
+  `src/components/file-dropzone-input.tsx` (`FileDropzoneInput`) — murni
+  perubahan tampilan sisi klien, nama field/atribut wajib/Server Action
+  penerimanya semua tidak berubah.
 
 ## Status hosting/deployment
 
@@ -374,8 +603,9 @@ ini bukan sesuatu yang perlu dipikirkan saat menjalankan secara lokal.
 - `src/lib/repo/designPhotos.ts`, tabel `design_photos` (lihat
   `src/lib/schema.sql`), `src/app/api/design-photos/[photoId]/route.ts` —
   foto desain pisau per pesanan yang terlihat semua divisi/vendor (beda
-  dari `attachments` yang terikat per tahap). Diunggah lewat form di
-  `src/app/(app)/orders/new/page.tsx` (wajib minimal 3, divalidasi di
+  dari `attachments` yang terikat per tahap). Diunggah lewat form 4-slot
+  (`src/components/design-photo-input.tsx`) di
+  `src/app/(app)/orders/new/page.tsx` (wajib minimal 1, divalidasi di
   `src/app/(app)/orders/new/actions.ts`) dan bisa ditambah lagi dari
   `src/app/(app)/orders/[id]/page.tsx` (`addDesignPhotosAction`, admin-only,
   tanpa minimal). Foto pertama pesanan juga muncul sebagai thumbnail di

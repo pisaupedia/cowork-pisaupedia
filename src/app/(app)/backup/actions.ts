@@ -1,8 +1,20 @@
 'use server';
 
 import { redirect } from 'next/navigation';
+import { revalidatePath } from 'next/cache';
 import { requireAdmin } from '@/lib/session';
-import { validateRestoreCandidate, restoreFromBuffer, RestoreValidationError } from '@/lib/backup';
+import { validateRestoreCandidate, restoreFromBuffer, RestoreValidationError, runAutoBackup } from '@/lib/backup';
+import { setFlash } from '@/lib/flash';
+
+/** Memicu satu kali backup otomatis secara manual (di luar jadwal harian) —
+ * berguna misalnya tepat sebelum melakukan perubahan besar. Menjalankan
+ * fungsi yang sama dengan scheduler (lihat src/lib/scheduler.ts). */
+export async function runAutoBackupNowAction(): Promise<void> {
+  await requireAdmin();
+  const result = runAutoBackup();
+  await setFlash('success', `Backup otomatis baru berhasil dibuat: ${result.name}.`);
+  revalidatePath('/backup');
+}
 
 export async function restoreBackupAction(formData: FormData): Promise<void> {
   await requireAdmin();

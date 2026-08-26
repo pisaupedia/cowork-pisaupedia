@@ -143,6 +143,11 @@ export default async function InvoicesPage({
                         <Link href={`/invoices/${d.id}`} className="iv-link">
                           View / Edit
                         </Link>
+                        {d.order_id ? (
+                          <Link href={`/orders/${d.order_id}`} className="iv-link" title="Linked production order">
+                            Source Order
+                          </Link>
+                        ) : null}
                         <form action={deleteDocumentAction}>
                           <input type="hidden" name="id" value={d.id} />
                           <ConfirmDeleteButton

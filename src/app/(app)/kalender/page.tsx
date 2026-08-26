@@ -133,7 +133,7 @@ export default async function KalenderPage({
         <div className="flex flex-col gap-2 rounded-xl border border-black/10 bg-white p-4">
           <h2 className="font-heading text-sm font-semibold">Deadline pada {formatTanggal(tanggal)}</h2>
           {selectedOrders && selectedOrders.length > 0 ? (
-            selectedOrders.map((c) => <OrderCard key={c.id} card={c} />)
+            selectedOrders.map((c) => <OrderCard key={c.id} card={c} from="kalender" />)
           ) : (
             <p className="text-sm text-black/55">Tidak ada deadline pada tanggal ini.</p>
           )}

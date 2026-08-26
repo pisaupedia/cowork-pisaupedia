@@ -1,7 +1,9 @@
+import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { requireUser } from '@/lib/session';
 import { listPendingApprovalOrders, listApprovalHistory } from '@/lib/view';
 import { formatTanggal, formatRupiah } from '@/lib/derive';
+import { SubmitButton } from '@/components/submit-button';
 import { approveOrderAction, rejectOrderAction } from './actions';
 
 export default async function ApprovalPage() {
@@ -45,21 +47,31 @@ export default async function ApprovalPage() {
                 <span>Masuk: {formatTanggal(o.tanggal_masuk)}</span>
                 <span>Deadline: {formatTanggal(o.deadline)}</span>
               </div>
-              <div className="flex gap-2">
+              <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-end">
                 <form action={approveOrderAction}>
                   <input type="hidden" name="orderId" value={o.id} />
-                  <button type="submit" className="rounded-md bg-[oklch(0.5_0.12_142)] px-3.5 py-2 text-xs font-semibold text-white">
+                  <SubmitButton
+                    pendingText="Menyetujui…"
+                    className="w-full rounded-md bg-[oklch(0.5_0.12_142)] px-3.5 py-2 text-xs font-semibold text-white sm:w-auto"
+                  >
                     Setujui
-                  </button>
+                  </SubmitButton>
                 </form>
-                <form action={rejectOrderAction}>
+                <form action={rejectOrderAction} className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-end">
                   <input type="hidden" name="orderId" value={o.id} />
-                  <button
-                    type="submit"
-                    className="rounded-md border border-[oklch(0.75_0.15_25)] bg-white px-3.5 py-2 text-xs font-semibold text-[oklch(0.42_0.14_25)]"
+                  <input
+                    type="text"
+                    name="alasan"
+                    required
+                    placeholder="Alasan penolakan (wajib diisi)…"
+                    className="w-full rounded-md border border-black/15 bg-white px-2.5 py-2 text-xs outline-none focus:border-[var(--brand-blue)] sm:w-56"
+                  />
+                  <SubmitButton
+                    pendingText="Menolak…"
+                    className="w-full rounded-md border border-[oklch(0.75_0.15_25)] bg-white px-3.5 py-2 text-xs font-semibold text-[oklch(0.42_0.14_25)] sm:w-auto"
                   >
                     Tolak
-                  </button>
+                  </SubmitButton>
                 </form>
               </div>
             </div>
@@ -73,23 +85,39 @@ export default async function ApprovalPage() {
           <p className="text-sm text-black/55">Belum ada keputusan approval.</p>
         ) : (
           history.map((o) => (
-            <div key={o.id} className="flex items-center justify-between gap-3 rounded-lg px-3 py-2 hover:bg-black/[0.02]">
-              <div>
+            <div
+              key={o.id}
+              className="flex flex-col gap-2 rounded-lg px-3 py-2 hover:bg-black/[0.02] sm:flex-row sm:items-center sm:justify-between"
+            >
+              <div className="min-w-0">
                 <div className="font-heading text-[13px] font-semibold">{o.kode}</div>
                 <div className="text-xs text-black/55">
                   {o.jenis} · {o.pelanggan}
                 </div>
+                {o.approval_status === 'DITOLAK' && o.reject_reason ? (
+                  <div className="mt-0.5 text-xs italic text-[oklch(0.42_0.14_25)]">Alasan: {o.reject_reason}</div>
+                ) : null}
               </div>
-              <span
-                className="rounded-full px-2.5 py-1 text-[11px] font-semibold"
-                style={
-                  o.approval_status === 'DISETUJUI'
-                    ? { background: 'oklch(0.94 0.045 142)', color: 'oklch(0.36 0.09 142)' }
-                    : { background: 'oklch(0.94 0.06 25)', color: 'oklch(0.42 0.14 25)' }
-                }
-              >
-                {o.approval_status === 'DISETUJUI' ? 'Disetujui' : 'Ditolak'}
-              </span>
+              <div className="flex flex-shrink-0 items-center gap-2">
+                {o.approval_status === 'DITOLAK' ? (
+                  <Link
+                    href={`/orders/${o.id}/edit`}
+                    className="rounded-md border border-black/15 px-2.5 py-1 text-[11px] font-semibold text-[var(--brand-blue)] hover:border-[var(--brand-blue)]"
+                  >
+                    Revisi &amp; Ajukan Ulang
+                  </Link>
+                ) : null}
+                <span
+                  className="rounded-full px-2.5 py-1 text-[11px] font-semibold"
+                  style={
+                    o.approval_status === 'DISETUJUI'
+                      ? { background: 'oklch(0.94 0.045 142)', color: 'oklch(0.36 0.09 142)' }
+                      : { background: 'oklch(0.94 0.06 25)', color: 'oklch(0.42 0.14 25)' }
+                  }
+                >
+                  {o.approval_status === 'DISETUJUI' ? 'Disetujui' : 'Ditolak'}
+                </span>
+              </div>
             </div>
           ))
         )}

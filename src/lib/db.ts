@@ -31,13 +31,35 @@ function migrate(database: DatabaseSync): void {
     if (!existingStageCols.has(name)) database.exec(ddl);
   }
 
+  // honor_dibayar (nominal honor yang sudah dibayarkan, bisa dicicil/DP) —
+  // ditambahkan setelah tabel order_stages sudah lama pakai honor_status
+  // biner (BELUM/SUDAH). Untuk database lama: tahap yang sebelumnya sudah
+  // ditandai 'SUDAH' dianggap sudah lunas 100% (honor_dibayar = honor_jumlah)
+  // supaya laporan pembayaran vendor tidak tiba-tiba terlihat kosong.
+  if (!existingStageCols.has('honor_dibayar')) {
+    database.exec('ALTER TABLE order_stages ADD COLUMN honor_dibayar INTEGER NOT NULL DEFAULT 0');
+    database.exec("UPDATE order_stages SET honor_dibayar = honor_jumlah WHERE honor_status = 'SUDAH'");
+  }
+
   const orderCols = database.prepare('PRAGMA table_info(orders)').all() as { name: string }[];
   const existingOrderCols = new Set(orderCols.map((c) => c.name));
   for (const [name, ddl] of [
     ['archived', 'ALTER TABLE orders ADD COLUMN archived INTEGER NOT NULL DEFAULT 0'],
     ['archived_at', 'ALTER TABLE orders ADD COLUMN archived_at TEXT'],
+    ['catatan', 'ALTER TABLE orders ADD COLUMN catatan TEXT'],
+    ['reject_reason', 'ALTER TABLE orders ADD COLUMN reject_reason TEXT'],
   ] as const) {
     if (!existingOrderCols.has(name)) database.exec(ddl);
+  }
+
+  // documents.order_id ditambahkan setelah modul invoice sudah lama berjalan
+  // terpisah dari data pesanan — lihat catatan di schema.sql. Tabel
+  // `documents` sendiri kemungkinan belum ada di database yang sangat lama
+  // (sebelum modul invoice digabung); PRAGMA table_info pada tabel yang
+  // belum ada mengembalikan array kosong, jadi aman diperiksa begini.
+  const documentCols = database.prepare('PRAGMA table_info(documents)').all() as { name: string }[];
+  if (documentCols.length > 0 && !documentCols.some((c) => c.name === 'order_id')) {
+    database.exec('ALTER TABLE documents ADD COLUMN order_id TEXT REFERENCES orders(id)');
   }
 }
 

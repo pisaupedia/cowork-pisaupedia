@@ -1,7 +1,8 @@
 import { redirect } from 'next/navigation';
 import { requireUser } from '@/lib/session';
-import { getDbStats } from '@/lib/backup';
-import { restoreBackupAction } from './actions';
+import { getDbStats, listAutoBackups } from '@/lib/backup';
+import { SubmitButton } from '@/components/submit-button';
+import { restoreBackupAction, runAutoBackupNowAction } from './actions';
 
 function formatBytes(n: number): string {
   if (n < 1024) return `${n} B`;
@@ -32,6 +33,7 @@ export default async function BackupPage({
   const errorText = error === 'invalid' ? (msg ?? 'File tidak valid.') : error ? ERROR_MESSAGES[error] : null;
 
   const stats = getDbStats();
+  const autoBackups = listAutoBackups();
 
   return (
     <div className="flex max-w-2xl flex-col gap-6">
@@ -61,6 +63,48 @@ export default async function BackupPage({
       </div>
 
       <div className="flex flex-col gap-3 rounded-xl border border-black/10 bg-white p-5">
+        <div className="flex flex-wrap items-start justify-between gap-2">
+          <div>
+            <h2 className="font-heading text-sm font-semibold">Backup Otomatis</h2>
+            <p className="text-sm text-black/55">
+              Server ini otomatis membuat backup baru setiap hari (dan menyimpan {autoBackups.length > 0 ? 'hingga 14 backup terakhir' : '14 backup terakhir'})
+              tanpa perlu diingat manual — cadangan tetap berjalan meskipun tidak ada yang mengunduh secara rutin.
+              Backup ini tersimpan di server yang sama, jadi tetap disarankan sesekali mengunduh salinannya ke
+              tempat lain (lihat bagian &quot;Unduh Backup&quot; di bawah) untuk perlindungan dari kerusakan server itu sendiri.
+            </p>
+          </div>
+          <form action={runAutoBackupNowAction}>
+            <SubmitButton
+              pendingText="Membuat backup…"
+              className="whitespace-nowrap rounded-lg border border-black/15 px-3.5 py-2 text-xs font-semibold text-black/70 hover:border-[var(--brand-blue)] hover:text-[var(--brand-blue)]"
+            >
+              Jalankan Backup Sekarang
+            </SubmitButton>
+          </form>
+        </div>
+        {autoBackups.length === 0 ? (
+          <p className="text-xs italic text-black/55">
+            Belum ada backup otomatis — backup pertama akan dibuat sekitar 1 menit setelah server ini menyala, lalu
+            berulang setiap 24 jam.
+          </p>
+        ) : (
+          <div className="flex flex-col gap-1.5">
+            {autoBackups.map((b) => (
+              <div key={b.name} className="flex flex-wrap items-center justify-between gap-2 rounded-md bg-black/[0.03] px-3 py-2 text-sm">
+                <span className="font-medium">{formatTimestamp(b.createdAt)}</span>
+                <div className="flex items-center gap-3">
+                  <span className="text-xs text-black/50">{formatBytes(b.sizeBytes)}</span>
+                  <a href={`/api/backup/auto/${b.name}`} className="text-xs font-semibold text-[var(--brand-blue)]">
+                    ⬇ Unduh
+                  </a>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div className="flex flex-col gap-3 rounded-xl border border-black/10 bg-white p-5">
         <h2 className="font-heading text-sm font-semibold">Unduh Backup</h2>
         <p className="text-sm text-black/55">
           Mengunduh salinan lengkap database saat ini sebagai satu file <code>.db</code>. Simpan file ini di tempat
@@ -72,7 +116,7 @@ export default async function BackupPage({
         >
           ⬇ Unduh Backup Database
         </a>
-        <p className="text-xs text-black/45">
+        <p className="text-xs text-black/55">
           Catatan: file ini hanya berisi data (pesanan, vendor, pengguna, honor, invoice, dll.) — foto &amp; dokumen
           lampiran yang diunggah vendor tersimpan terpisah di folder <code>uploads/</code> di server dan{' '}
           <strong>tidak</strong> ikut ada di dalam file backup ini.
@@ -105,12 +149,12 @@ export default async function BackupPage({
             <input type="checkbox" name="confirm" required className="mt-0.5 h-4 w-4" />
             Saya paham tindakan ini akan mengganti seluruh data saat ini dan tidak bisa dibatalkan.
           </label>
-          <button
-            type="submit"
+          <SubmitButton
+            pendingText="Memulihkan…"
             className="w-fit rounded-lg bg-[var(--brand-red)] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[var(--brand-red-dark)]"
           >
             Pulihkan Database Sekarang
-          </button>
+          </SubmitButton>
         </form>
       </div>
     </div>

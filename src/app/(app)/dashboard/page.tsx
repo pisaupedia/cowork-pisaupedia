@@ -1,12 +1,32 @@
 import Link from 'next/link';
 import { requireUser } from '@/lib/session';
-import { buildDashboard, listPendingApprovalOrders } from '@/lib/view';
+import { buildDashboard, buildVendorHonorSummary, listPendingApprovalOrders } from '@/lib/view';
 import { OrderCard } from '@/components/order-card';
+import { DIVISION_COLORS } from '@/lib/constants';
+import { deleteOrderAction } from './actions';
 
-export default async function DashboardPage() {
+export default async function DashboardPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ q?: string }>;
+}) {
   const user = await requireUser();
   const dash = buildDashboard(user);
   const pendingCount = user.role === 'ADMIN' ? listPendingApprovalOrders().length : 0;
+  const { q } = await searchParams;
+  const query = q?.trim().toLowerCase();
+  const attention = query
+    ? dash.attention.filter((c) => c.kode.toLowerCase().includes(query) || c.subtitle.toLowerCase().includes(query))
+    : dash.attention;
+
+  // Panel "Distribusi per Divisi" kurang berguna untuk vendor yang cuma
+  // bekerja di satu divisi — hampir semua baris akan tampil 0, jadi panel
+  // itu diganti ringkasan honor vendor tersebut untuk mereka. Admin/owner
+  // (yang butuh melihat semua divisi) selalu melihat panel distribusi
+  // seperti biasa.
+  const nonZeroDivisions = dash.divisiCounts.filter((d) => d.count > 0).length;
+  const showDivisiPanel = user.role !== 'VENDOR' || nonZeroDivisions > 1;
+  const vendorHonor = !showDivisiPanel && user.vendorId ? buildVendorHonorSummary(user.vendorId) : null;
 
   return (
     <div className="flex flex-col gap-6">
@@ -33,32 +53,73 @@ export default async function DashboardPage() {
 
       <div className="grid grid-cols-1 gap-5 md:grid-cols-[2fr_1fr]">
         <div className="flex flex-col gap-3 rounded-xl border border-black/10 bg-white p-5">
-          <h2 className="font-heading text-[15px] font-semibold">Perlu Perhatian</h2>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h2 className="font-heading text-[15px] font-semibold">Perlu Perhatian</h2>
+            <form method="get" className="flex items-center gap-2">
+              <input
+                type="search"
+                name="q"
+                defaultValue={q ?? ''}
+                placeholder="Cari kode / nama…"
+                className="w-40 rounded-md border border-black/15 px-2.5 py-1.5 text-xs outline-none focus:border-[var(--brand-blue)] sm:w-56"
+              />
+              <button type="submit" className="rounded-md border border-black/15 px-2.5 py-1.5 text-xs font-semibold text-black/60">
+                Cari
+              </button>
+            </form>
+          </div>
           {dash.attention.length === 0 ? (
-            <p className="text-sm text-[oklch(0.5_0.09_142)]">Semua pesanan dalam kondisi aman.</p>
+            <p className="text-sm text-black/55">Belum ada pesanan aktif.</p>
+          ) : attention.length === 0 ? (
+            <p className="text-sm text-black/55">Tidak ada pesanan yang cocok dengan pencarian &quot;{q}&quot;.</p>
           ) : (
             <div className="flex flex-col gap-2">
-              {dash.attention.map((c) => (
-                <OrderCard key={c.id} card={c} />
+              {attention.map((c) => (
+                <OrderCard
+                  key={c.id}
+                  card={c}
+                  from="dashboard"
+                  deleteAction={user.role === 'ADMIN' ? deleteOrderAction : undefined}
+                />
               ))}
             </div>
           )}
         </div>
 
-        <div className="flex flex-col gap-4 rounded-xl border border-black/10 bg-white p-5">
-          <h2 className="font-heading text-[15px] font-semibold">Distribusi per Divisi</h2>
-          {dash.divisiCounts.map((d) => (
-            <div key={d.name} className="flex flex-col gap-1">
-              <div className="flex justify-between text-xs text-black/60">
-                <span>{d.name}</span>
-                <span className="font-semibold">{d.count}</span>
+        {showDivisiPanel ? (
+          <div className="flex flex-col gap-4 rounded-xl border border-black/10 bg-white p-5">
+            <h2 className="font-heading text-[15px] font-semibold">Distribusi per Divisi</h2>
+            {dash.divisiCounts.map((d) => (
+              <div key={d.name} className="flex flex-col gap-1">
+                <div className="flex justify-between text-xs" style={{ color: DIVISION_COLORS[d.name] }}>
+                  <span className="font-semibold">{d.name}</span>
+                  <span className="font-semibold">{d.count}</span>
+                </div>
+                <div className="h-2 overflow-hidden rounded-full bg-black/[0.06]">
+                  <div
+                    className="h-full rounded-full"
+                    style={{ width: `${d.barWidth}%`, background: DIVISION_COLORS[d.name] }}
+                  />
+                </div>
               </div>
-              <div className="h-2 overflow-hidden rounded-full bg-black/[0.06]">
-                <div className="h-full rounded-full bg-[var(--brand-blue)]" style={{ width: `${d.barWidth}%` }} />
-              </div>
+            ))}
+          </div>
+        ) : vendorHonor ? (
+          <div className="flex flex-col gap-3 rounded-xl border border-black/10 bg-white p-5">
+            <h2 className="font-heading text-[15px] font-semibold">Ringkasan Honor Anda</h2>
+            <div className="flex flex-col gap-1">
+              <span className="text-xs text-black/55">Sudah Dibayarkan (semua tahap)</span>
+              <span className="text-lg font-semibold">{vendorHonor.totalDibayarLabel}</span>
             </div>
-          ))}
-        </div>
+            <div className="flex flex-col gap-1">
+              <span className="text-xs text-black/55">Belum Dibayarkan</span>
+              <span className="text-lg font-semibold" style={{ color: 'var(--status-terlambat-fg)' }}>
+                {vendorHonor.totalSisaLabel}
+              </span>
+            </div>
+            <p className="text-xs text-black/55">{vendorHonor.jumlahTahapAktif} tahap sedang berjalan/menunggu.</p>
+          </div>
+        ) : null}
       </div>
     </div>
   );

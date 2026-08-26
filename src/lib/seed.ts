@@ -56,7 +56,13 @@ function stageOf(orderId: string, divisi: Divisi) {
 
 function setStage(
   stageId: string,
-  opts: { status?: 'MENUNGGU' | 'BERJALAN' | 'SELESAI'; honorStatus?: 'BELUM' | 'SUDAH' }
+  opts: {
+    status?: 'MENUNGGU' | 'BERJALAN' | 'SELESAI';
+    /** 'SUDAH' = lunas 100% (honor_dibayar disamakan dengan honor_jumlah). */
+    honorStatus?: 'BELUM' | 'SUDAH';
+    /** Contoh DP/pembayaran sebagian — nominal absolut (Rp), bukan persen. */
+    honorDibayar?: number;
+  }
 ) {
   if (opts.status) {
     db.prepare("UPDATE order_stages SET status = ?, updated_at = datetime('now') WHERE id = ?").run(
@@ -66,8 +72,17 @@ function setStage(
   }
   if (opts.honorStatus) {
     db.prepare(
-      "UPDATE order_stages SET honor_status = ?, honor_tanggal_bayar = CASE WHEN ? = 'SUDAH' THEN datetime('now') ELSE NULL END WHERE id = ?"
-    ).run(opts.honorStatus, opts.honorStatus, stageId);
+      `UPDATE order_stages
+       SET honor_status = ?,
+           honor_dibayar = CASE WHEN ? = 'SUDAH' THEN honor_jumlah ELSE 0 END,
+           honor_tanggal_bayar = CASE WHEN ? = 'SUDAH' THEN datetime('now') ELSE NULL END
+       WHERE id = ?`
+    ).run(opts.honorStatus, opts.honorStatus, opts.honorStatus, stageId);
+  }
+  if (opts.honorDibayar !== undefined) {
+    db.prepare(
+      "UPDATE order_stages SET honor_dibayar = ?, honor_status = 'BELUM', honor_tanggal_bayar = datetime('now') WHERE id = ?"
+    ).run(Math.round(opts.honorDibayar), stageId);
   }
 }
 
@@ -126,7 +141,9 @@ export function runSeed(): void {
     const s0 = stageOf(o1.id, 'Cutting & Blacksmith');
     const s1 = stageOf(o1.id, 'Shaping & Heat Threatment');
     setStage(s0.id, { status: 'SELESAI', honorStatus: 'BELUM' });
-    setStage(s1.id, { status: 'BERJALAN' });
+    // Contoh DP: vendor minta dibayar separuh dulu sebelum lanjut kerja — honor
+    // total tahap ini Rp 2.700.000 (30% dari 9jt), baru dibayar Rp 1.350.000.
+    setStage(s1.id, { status: 'BERJALAN', honorDibayar: 1_350_000 });
     addNote(s0.id, 'Vendor Tajam Abadi', 'Bahan baja sudah ditempa sesuai pola golok standar.');
     addNote(s0.id, 'Vendor Tajam Abadi', 'Selesai ditempa, 20 unit siap diserahkan ke Shaping.');
     addAttachment({ stageId: s0.id, nama: 'foto_hasil_tempa_golok014.jpg', tipe: 'foto', oleh: 'Vendor Tajam Abadi', filePath: writePlaceholderFile(s0.id, 'foto_hasil_tempa_golok014.jpg', 'foto') });
