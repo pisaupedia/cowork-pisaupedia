@@ -7,7 +7,7 @@ export const DIVISIONS = [
 
 export type Divisi = (typeof DIVISIONS)[number];
 
-export const COMPANY_NAME = 'Pisaupedia Co';
+export const COMPANY_NAME = 'Pisaupedia';
 
 /** Kode konfirmasi yang harus diketik ulang sebelum operasi hapus data
  * (dokumen invoice/quotation/delivery note, dst.) benar-benar dijalankan.
