@@ -127,22 +127,11 @@ export async function deleteVendorAction(formData: FormData): Promise<void> {
   revalidatePath('/vendors');
 }
 
-/** Admin menghapus akun login vendor (bukan vendornya, hanya akunnya).
- * Riwayat lama (catatan/lampiran/foto desain) tidak terpengaruh karena
- * hanya menyimpan nama sebagai teks, bukan foreign key ke akun ini. */
-export async function deleteUserAction(formData: FormData): Promise<void> {
-  await requireAdmin();
-
-  const confirmCode = String(formData.get('confirmCode') ?? '');
-  if (confirmCode !== DELETE_CONFIRM_CODE) throw new Error('Kode konfirmasi hapus salah.');
-
-  const id = String(formData.get('id') ?? '');
-  const user = getUserById(id);
-  if (!user || user.role !== 'VENDOR') throw new Error('Akun vendor tidak ditemukan.');
-
-  deleteUser(id);
-  revalidatePath('/vendors');
-}
+// Catatan: sebelumnya ada deleteUserAction terpisah untuk menghapus HANYA
+// akun login vendor (menyisakan record vendornya) — dihapus karena membuat
+// vendor & akunnya terasa seperti dua hal terpisah. Sekarang hanya ada SATU
+// aksi hapus per vendor: deleteVendorAction di atas, yang menghapus vendor
+// beserta akun login-nya sekaligus (lihat komentar di deleteVendorAction).
 
 /** Membuat akun ADMIN baru — sebelumnya aplikasi ini hanya bisa punya SATU
  * admin tanpa jalan untuk membuat admin kedua dari dalam aplikasi, yang

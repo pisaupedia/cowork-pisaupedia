@@ -564,6 +564,29 @@ di atas dikirim:
   perubahan tampilan sisi klien, nama field/atribut wajib/Server Action
   penerimanya semua tidak berubah.
 
+### Pembaruan susulan (26 Agustus 2026) — Nama Vendor & Akun digabung jadi satu
+
+Di backend, nama vendor (`vendor.nama`) dan nama akun login (`user.name`)
+sebenarnya sudah selalu disamakan otomatis setiap kali vendor dibuat/diedit
+(lihat `createVendorAction`/`updateVendorAction` di
+`src/app/(app)/vendors/actions.ts`) — tapi di halaman **Vendor & Pengguna**
+keduanya masih tampil seperti dua hal terpisah: nama akun (`@username`)
+muncul di kotak tersendiri di bawah nama vendor, dan ada dua tombol hapus
+berbeda ("Hapus Vendor" & "Hapus Akun") padahal menghapus vendor sudah
+otomatis menghapus akun login-nya juga. Diperbaiki:
+
+- Nama vendor & username sekarang tampil jadi satu baris di header kartu
+  vendor ("Vendor Tajam Abadi · @tajamabadi"), bukan di blok terpisah.
+- Tombol "Reset Password" dipindah ke baris aksi utama (sebelah "Edit
+  Vendor & Akun"), bukan lagi di sub-daftar akun terpisah.
+- Tombol "Hapus Akun" (`deleteUserAction`, hapus akun login saja tanpa
+  hapus vendornya) dihapus total. Sekarang hanya ada **satu** aksi hapus
+  per vendor — "Hapus Vendor" — yang tetap menghapus vendor beserta akun
+  login-nya sekaligus, seperti sebelumnya.
+
+Kode: `src/app/(app)/vendors/page.tsx`, `src/app/(app)/vendors/actions.ts`
+(fungsi `deleteUserAction` dihapus, tidak dipakai lagi di mana pun).
+
 ## Status hosting/deployment
 
 Aplikasi ini saat ini disiapkan untuk **dijalankan secara lokal** (`npm run

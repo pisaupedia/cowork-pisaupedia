@@ -8,7 +8,6 @@ import {
   createAdminAction,
   createVendorAction,
   deleteAdminAction,
-  deleteUserAction,
   deleteVendorAction,
   resetAdminPasswordAction,
   resetVendorPasswordAction,
@@ -40,15 +39,21 @@ export default async function VendorsPage() {
           vendors.map((v) => {
             const accounts = listUsersForVendor(v.id);
             // Setiap vendor hanya punya satu akun (dibuat sekaligus saat vendor
-            // dibuat — lihat createVendorAction), jadi form Edit Vendor di bawah
-            // sekaligus mengedit akun ini dalam satu form, bukan dua form terpisah.
+            // dibuat — lihat createVendorAction). Nama vendor & nama akun adalah
+            // SATU identitas yang sama (ditampilkan bersama di header, bukan dua
+            // baris terpisah), dan hapus akun tidak lagi jadi tombol tersendiri —
+            // "Hapus Vendor" di bawah sudah sekaligus menghapus akun login-nya,
+            // jadi cuma ada SATU aksi hapus per vendor.
             const account = accounts[0];
             const stageCount = countStagesForVendor(v.id);
             return (
               <div key={v.id} className="flex flex-col gap-2 rounded-lg border border-black/10 px-3.5 py-2.5">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div>
-                    <div className="text-sm font-semibold">{v.nama}</div>
+                    <div className="text-sm font-semibold">
+                      {v.nama}
+                      {account ? <span className="ml-1.5 font-normal text-black/45">· @{account.username}</span> : null}
+                    </div>
                     <div className="text-xs text-black/50">{v.kontak ?? 'Tidak ada kontak'}</div>
                   </div>
                   <div className="flex flex-wrap items-center gap-3">
@@ -99,6 +104,36 @@ export default async function VendorsPage() {
                         </button>
                       </form>
                     </details>
+                    {account ? (
+                      <details>
+                        <summary className="cursor-pointer text-xs font-semibold text-[var(--brand-blue)]">
+                          Reset Password
+                        </summary>
+                        <form
+                          action={resetVendorPasswordAction}
+                          className="mt-2 flex flex-wrap items-end gap-2 rounded-md border border-black/10 bg-white p-2.5"
+                        >
+                          <input type="hidden" name="userId" value={account.id} />
+                          <label className="flex flex-col gap-1 text-xs font-medium text-black/60">
+                            Password Baru
+                            <input
+                              name="newPassword"
+                              type="password"
+                              required
+                              minLength={6}
+                              placeholder="Min. 6 karakter"
+                              className="rounded-md border border-black/15 px-2.5 py-1.5 text-sm font-normal text-black outline-none focus:border-[var(--brand-blue)]"
+                            />
+                          </label>
+                          <button
+                            type="submit"
+                            className="rounded-md bg-[var(--brand-blue)] px-3 py-1.5 text-xs font-semibold text-white"
+                          >
+                            Simpan
+                          </button>
+                        </form>
+                      </details>
+                    ) : null}
                     {stageCount > 0 ? (
                       <span
                         className="text-xs text-black/50"
@@ -113,62 +148,13 @@ export default async function VendorsPage() {
                           label="Hapus Vendor"
                           triggerClassName="text-xs font-semibold text-red-600"
                           title="Hapus Vendor"
-                          description={`Vendor "${v.nama}" beserta akun login-nya akan dihapus permanen.`}
+                          description={`Vendor "${v.nama}"${account ? ` beserta akun login @${account.username}` : ''} akan dihapus permanen.`}
                         />
                       </form>
                     )}
                   </div>
                 </div>
-                {accounts.length === 0 ? (
-                  <div className="text-xs text-black/55">Belum ada akun login.</div>
-                ) : (
-                  <div className="flex flex-col gap-1.5">
-                    {accounts.map((acc) => (
-                      <div key={acc.id} className="flex flex-wrap items-center gap-2 rounded-md bg-black/[0.03] px-2.5 py-1.5">
-                        <span className="text-xs font-medium text-black/70">@{acc.username}</span>
-                        <div className="ml-auto flex flex-wrap items-center gap-3">
-                          <details>
-                            <summary className="cursor-pointer text-xs font-semibold text-[var(--brand-blue)]">
-                              Reset Password
-                            </summary>
-                            <form
-                              action={resetVendorPasswordAction}
-                              className="mt-2 flex flex-wrap items-end gap-2 rounded-md border border-black/10 bg-white p-2.5"
-                            >
-                              <input type="hidden" name="userId" value={acc.id} />
-                              <label className="flex flex-col gap-1 text-xs font-medium text-black/60">
-                                Password Baru
-                                <input
-                                  name="newPassword"
-                                  type="password"
-                                  required
-                                  minLength={6}
-                                  placeholder="Min. 6 karakter"
-                                  className="rounded-md border border-black/15 px-2.5 py-1.5 text-sm font-normal text-black outline-none focus:border-[var(--brand-blue)]"
-                                />
-                              </label>
-                              <button
-                                type="submit"
-                                className="rounded-md bg-[var(--brand-blue)] px-3 py-1.5 text-xs font-semibold text-white"
-                              >
-                                Simpan
-                              </button>
-                            </form>
-                          </details>
-                          <form action={deleteUserAction}>
-                            <input type="hidden" name="id" value={acc.id} />
-                            <ConfirmDeleteButton
-                              label="Hapus Akun"
-                              triggerClassName="text-xs font-semibold text-red-600"
-                              title="Hapus Akun"
-                              description={`Akun login @${acc.username} akan dihapus permanen. Riwayat lama (catatan/lampiran) tetap tersimpan.`}
-                            />
-                          </form>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
+                {!account ? <div className="text-xs text-black/55">Belum ada akun login.</div> : null}
               </div>
             );
           })
