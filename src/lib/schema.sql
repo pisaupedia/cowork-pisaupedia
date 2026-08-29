@@ -69,6 +69,18 @@ CREATE TABLE IF NOT EXISTS order_stages (
   urutan INTEGER NOT NULL,
   vendor_id TEXT REFERENCES vendors(id),
   status TEXT NOT NULL DEFAULT 'MENUNGGU' CHECK (status IN ('MENUNGGU', 'BERJALAN', 'SELESAI')),
+  -- honor_jumlah = TOTAL honor tahap ini, dan SELALU yang dipakai di semua
+  -- perhitungan lain (computeHargaModal, laporan, status lunas/DP, dst.) —
+  -- baik untuk mode Borongan maupun Per Unit, supaya tidak ada bagian lain
+  -- di aplikasi yang perlu tahu soal mode/tarif sama sekali.
+  -- honor_mode & honor_rate menentukan CARA honor_jumlah diisi:
+  --   'BORONGAN'  -> honor_jumlah diketik langsung oleh admin; honor_rate = 0 (tidak dipakai).
+  --   'PER_UNIT'  -> admin mengisi honor_rate (tarif per pcs); honor_jumlah = honor_rate * orders.jumlah,
+  --                  dihitung ulang otomatis di server setiap kali honor_rate diubah
+  --                  (updateStageCostAction) ATAU jumlah pesanan diubah
+  --                  (recalcPerUnitHonorForOrder, dipanggil dari updateOrderAction).
+  honor_mode TEXT NOT NULL DEFAULT 'BORONGAN' CHECK (honor_mode IN ('BORONGAN', 'PER_UNIT')),
+  honor_rate INTEGER NOT NULL DEFAULT 0,
   honor_jumlah INTEGER NOT NULL DEFAULT 0,
   -- honor_dibayar = akumulasi nominal yang SUDAH dibayarkan ke vendor untuk
   -- tahap ini (bisa dicicil/DP, tidak harus sekali lunas — lihat

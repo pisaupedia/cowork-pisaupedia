@@ -2,22 +2,36 @@ import Link from 'next/link';
 import { requireUser } from '@/lib/session';
 import { buildDashboard, buildVendorHonorSummary, listPendingApprovalOrders } from '@/lib/view';
 import { OrderCard } from '@/components/order-card';
+import { StageCostQuickEdit } from '@/components/stage-cost-quick-edit';
 import { DIVISION_COLORS } from '@/lib/constants';
 import { deleteOrderAction } from './actions';
+import { updateStageCostAction } from '../orders/[id]/actions';
 
 export default async function DashboardPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string }>;
+  searchParams: Promise<{ q?: string; scope?: string }>;
 }) {
   const user = await requireUser();
   const dash = buildDashboard(user);
   const pendingCount = user.role === 'ADMIN' ? listPendingApprovalOrders().length : 0;
-  const { q } = await searchParams;
+  const { q, scope } = await searchParams;
   const query = q?.trim().toLowerCase();
-  const attention = query
+  const scopedBerjalan = scope === 'berjalan';
+
+  const searched = query
     ? dash.attention.filter((c) => c.kode.toLowerCase().includes(query) || c.subtitle.toLowerCase().includes(query))
     : dash.attention;
+  // Tab "Sedang Berjalan" — daftar "Perlu Perhatian" di bawah sudah mencakup
+  // semua pesanan aktif (lihat komentar attention di src/lib/view.ts), tab
+  // ini cuma menyaring TAMPILAN ke tahap yang statusnya benar-benar BERJALAN
+  // (bukan MENUNGGU giliran tahap sebelumnya) — bukan hak edit, honor & harga
+  // modal tetap bisa diubah kapan saja lewat StageCostQuickEdit di bawah,
+  // baik tahapnya BERJALAN maupun MENUNGGU (lihat updateStageCostAction).
+  const berjalanCount = dash.attention.filter((c) => c.stageStatus === 'BERJALAN').length;
+  const attention = scopedBerjalan ? searched.filter((c) => c.stageStatus === 'BERJALAN') : searched;
+  const scopeHrefAll = q ? `/dashboard?q=${encodeURIComponent(q)}` : '/dashboard';
+  const scopeHrefBerjalan = q ? `/dashboard?q=${encodeURIComponent(q)}&scope=berjalan` : '/dashboard?scope=berjalan';
 
   // Panel "Distribusi per Divisi" kurang berguna untuk vendor yang cuma
   // bekerja di satu divisi — hampir semua baris akan tampil 0, jadi panel
@@ -56,6 +70,7 @@ export default async function DashboardPage({
           <div className="flex flex-wrap items-center justify-between gap-2">
             <h2 className="font-heading text-[15px] font-semibold">Perlu Perhatian</h2>
             <form method="get" className="flex items-center gap-2">
+              {scopedBerjalan ? <input type="hidden" name="scope" value="berjalan" /> : null}
               <input
                 type="search"
                 name="q"
@@ -68,10 +83,36 @@ export default async function DashboardPage({
               </button>
             </form>
           </div>
+
+          <div className="flex w-fit gap-1 rounded-lg bg-black/[0.04] p-1">
+            <Link
+              href={scopeHrefAll}
+              className={
+                'rounded-md px-3 py-1.5 text-xs font-semibold ' +
+                (!scopedBerjalan ? 'bg-white text-black shadow-sm' : 'text-black/55')
+              }
+            >
+              Semua Aktif <span className="tabular-nums opacity-60">{dash.attention.length}</span>
+            </Link>
+            <Link
+              href={scopeHrefBerjalan}
+              className={
+                'rounded-md px-3 py-1.5 text-xs font-semibold ' +
+                (scopedBerjalan ? 'bg-white text-black shadow-sm' : 'text-black/55')
+              }
+            >
+              Sedang Berjalan <span className="tabular-nums opacity-60">{berjalanCount}</span>
+            </Link>
+          </div>
+
           {dash.attention.length === 0 ? (
             <p className="text-sm text-black/55">Belum ada pesanan aktif.</p>
           ) : attention.length === 0 ? (
-            <p className="text-sm text-black/55">Tidak ada pesanan yang cocok dengan pencarian &quot;{q}&quot;.</p>
+            <p className="text-sm text-black/55">
+              {scopedBerjalan
+                ? 'Tidak ada pekerjaan yang sedang berjalan saat ini — semuanya masih menunggu giliran tahap sebelumnya.'
+                : <>Tidak ada pesanan yang cocok dengan pencarian &quot;{q}&quot;.</>}
+            </p>
           ) : (
             <div className="flex flex-col gap-2">
               {attention.map((c) => (
@@ -80,6 +121,24 @@ export default async function DashboardPage({
                   card={c}
                   from="dashboard"
                   deleteAction={user.role === 'ADMIN' ? deleteOrderAction : undefined}
+                  stagePill={{
+                    label: c.stageStatus === 'BERJALAN' ? 'Berjalan' : 'Menunggu',
+                    tone: c.stageStatus === 'BERJALAN' ? 'berjalan' : 'menunggu',
+                  }}
+                  costEditor={
+                    c.canEditCosts ? (
+                      <StageCostQuickEdit
+                        stageId={c.currentStageId}
+                        honorJumlahRaw={c.honorJumlahRaw}
+                        honorMode={c.honorMode}
+                        honorRateRaw={c.honorRateRaw}
+                        orderJumlah={c.orderJumlah}
+                        materialCostLabel={c.materialCostLabel}
+                        materialCostRaw={c.materialCostRaw}
+                        action={updateStageCostAction}
+                      />
+                    ) : undefined
+                  }
                 />
               ))}
             </div>

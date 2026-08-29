@@ -86,6 +86,31 @@ export interface OrderCardView {
   /** Jumlah total foto desain pesanan ini — dipakai untuk badge "+N" di
    * thumbnail kalau ada lebih dari satu foto. */
   designPhotoCount: number;
+  /** Status tahap yang sedang berjalan/berikutnya (lihat currentStage) —
+   * dipakai untuk pill "Berjalan/Menunggu" & tab filter "Sedang Berjalan"
+   * di panel Perlu Perhatian Dashboard. */
+  stageStatus: 'MENUNGGU' | 'BERJALAN' | 'SELESAI';
+  /** ID tahap yang sedang berjalan/berikutnya — dipakai sebagai target
+   * `stageId` untuk form edit honor/modal langsung di kartu Dashboard. */
+  currentStageId: string;
+  /** Admin-only: bisa mengedit honor & harga modal tahap ini langsung dari
+   * kartu (lihat StageCostQuickEdit) — sama seperti canEditCosts per-tahap
+   * di StageView, dipakai di halaman detail pesanan. */
+  canEditCosts: boolean;
+  honorJumlahRaw: number;
+  /** Mode & tarif honor tahap ini — lihat catatan lengkap di schema.sql &
+   * HonorModeField. */
+  honorMode: 'BORONGAN' | 'PER_UNIT';
+  honorRateRaw: number;
+  /** Jumlah unit pesanan ini — dipakai sebagai `qty` tetap oleh
+   * HonorModeField saat mode Per Unit, supaya pratinjau tarif × jumlah bisa
+   * dihitung tanpa perlu memuat OrderRow penuh di kartu Dashboard. */
+  orderJumlah: number;
+  /** Label input harga modal material yang relevan untuk divisi tahap ini
+   * (null kalau divisi tersebut tidak punya komponen ini) — lihat logika
+   * yang sama di buildOrderDetail. */
+  materialCostLabel: string | null;
+  materialCostRaw: number;
 }
 
 export function toOrderCard(order: OrderRow, user: SessionUser): OrderCardView {
@@ -99,6 +124,12 @@ export function toOrderCard(order: OrderRow, user: SessionUser): OrderCardView {
     ? 'Ditugaskan ke Anda'
     : cur.vendor_nama ?? '—';
   const designPhotos = listDesignPhotosForOrder(order.id);
+  const materialCostLabel =
+    cur.divisi === 'Cutting & Blacksmith'
+      ? 'Harga Modal Material Baja'
+      : cur.divisi === 'Handle & Cover'
+        ? 'Harga Modal Bahan Kayu'
+        : null;
 
   return {
     id: order.id,
@@ -114,6 +145,15 @@ export function toOrderCard(order: OrderRow, user: SessionUser): OrderCardView {
     isFullyComplete: doneCount === stages.length,
     thumbUrl: designPhotos.length > 0 ? `/api/design-photos/${designPhotos[0].id}` : null,
     designPhotoCount: designPhotos.length,
+    stageStatus: cur.status,
+    currentStageId: cur.id,
+    canEditCosts: !isVendorUser(user),
+    honorJumlahRaw: cur.honor_jumlah,
+    honorMode: cur.honor_mode,
+    honorRateRaw: cur.honor_rate,
+    orderJumlah: order.jumlah,
+    materialCostLabel,
+    materialCostRaw: cur.material_cost,
   };
 }
 
@@ -220,6 +260,10 @@ export interface StageView {
   /** Total Pembayaran — total honor yang disepakati untuk tahap ini. */
   honorJumlahLabel: string;
   honorJumlahRaw: number;
+  /** Mode & tarif honor tahap ini — lihat catatan lengkap di schema.sql &
+   * HonorModeField. */
+  honorMode: 'BORONGAN' | 'PER_UNIT';
+  honorRateRaw: number;
   /** Sudah Dibayarkan — akumulasi nominal yang sudah dibayar (bisa DP/dicicil). */
   honorDibayarLabel: string;
   honorDibayarRaw: number;
@@ -233,7 +277,14 @@ export interface StageView {
   canRecordPayment: boolean;
   /** Riwayat tiap pembayaran honor yang sudah dicatat untuk tahap ini,
    * terlama ke terbaru — bisa lebih dari satu (misalnya DP lalu pelunasan). */
-  honorPayments: { id: string; jumlahLabel: string; catatan: string | null; oleh: string; tanggalLabel: string }[];
+  honorPayments: {
+    id: string;
+    jumlahRaw: number;
+    jumlahLabel: string;
+    catatan: string | null;
+    oleh: string;
+    tanggalLabel: string;
+  }[];
   /** Admin-only: bisa mengedit honor & komponen harga modal tahap ini. */
   canEditCosts: boolean;
   /** Label input harga modal material yang relevan untuk divisi ini (null jika tidak ada). */
@@ -330,6 +381,7 @@ export function buildOrderDetail(orderId: string, user: SessionUser): OrderDetai
     const honorPayments = showHonor
       ? listHonorPaymentsForStage(s.id).map((p) => ({
           id: p.id,
+          jumlahRaw: p.jumlah,
           jumlahLabel: formatRupiah(p.jumlah),
           catatan: p.catatan,
           oleh: p.oleh,
@@ -373,6 +425,8 @@ export function buildOrderDetail(orderId: string, user: SessionUser): OrderDetai
       showHonor,
       honorJumlahLabel: formatRupiah(s.honor_jumlah),
       honorJumlahRaw: s.honor_jumlah,
+      honorMode: s.honor_mode,
+      honorRateRaw: s.honor_rate,
       honorDibayarLabel: formatRupiah(s.honor_dibayar),
       honorDibayarRaw: s.honor_dibayar,
       honorSisaLabel: formatRupiah(honorSisa),

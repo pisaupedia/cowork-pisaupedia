@@ -3,6 +3,7 @@ import { requireUser } from '@/lib/session';
 import { listVendors } from '@/lib/repo/vendors';
 import { DIVISIONS } from '@/lib/constants';
 import { DesignPhotoInput } from '@/components/design-photo-input';
+import { HonorModeField } from '@/components/honor-mode-field';
 import { SubmitButton } from '@/components/submit-button';
 import { createOrderAction } from './actions';
 
@@ -68,17 +69,10 @@ export default async function NewOrderPage() {
                   </select>
                 </label>
 
-                <label className="flex flex-col gap-1 text-xs font-medium text-black/60">
-                  Honor Vendor (Rp)
-                  <input
-                    name={`honor_${div}`}
-                    type="number"
-                    min={0}
-                    step={1000}
-                    placeholder="0"
-                    className="rounded-lg border border-black/15 px-3 py-2 text-sm font-normal text-black outline-none focus:border-[var(--brand-blue)]"
-                  />
-                </label>
+                <HonorModeField
+                  fieldNames={{ mode: `honorMode_${div}`, rate: `honorRate_${div}`, total: `honor_${div}` }}
+                  qty={{ watchFieldName: 'jumlah' }}
+                />
 
                 {div === 'Cutting & Blacksmith' ? (
                   <label className="flex flex-col gap-1 text-xs font-medium text-black/60">

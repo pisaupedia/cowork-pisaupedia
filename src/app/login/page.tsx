@@ -75,6 +75,12 @@ export default async function LoginPage({
             Masuk
           </button>
         </form>
+
+        <div className="mt-6 rounded-lg bg-black/[0.03] p-3 text-[11px] leading-relaxed text-black/50">
+          <p className="mb-1 font-medium text-black/60">Akun demo:</p>
+          <p>Admin — <code>pisaupedia2026</code> / <code>Gyuto240mm</code></p>
+          <p>Vendor — <code>tajamabadi</code> / <code>vendor123</code> (dan vendor lain, lihat README)</p>
+        </div>
       </div>
     </main>
   );

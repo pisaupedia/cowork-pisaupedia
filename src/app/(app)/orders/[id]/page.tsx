@@ -7,10 +7,14 @@ import { listVendors } from '@/lib/repo/vendors';
 import { SubmitButton } from '@/components/submit-button';
 import { FlashFromQuery } from '@/components/flash-from-query';
 import { FileDropzoneInput } from '@/components/file-dropzone-input';
+import { HonorPaymentRow } from '@/components/honor-payment-row';
+import { HonorModeField } from '@/components/honor-mode-field';
 import {
   uploadAttachmentAction,
   markCompleteAction,
   recordHonorPaymentAction,
+  editHonorPaymentAction,
+  deleteHonorPaymentAction,
   addNoteAction,
   updateStageCostAction,
   addDesignPhotosAction,
@@ -352,15 +356,19 @@ export default async function OrderDetailPage({
                         </summary>
                         <div className="mt-1.5 flex flex-col gap-1">
                           {stage.honorPayments.map((p) => (
-                            <div key={p.id} className="flex flex-wrap items-center justify-between gap-2 rounded-md bg-white px-2.5 py-1.5">
-                              <span>
-                                <strong>{p.jumlahLabel}</strong>
-                                {p.catatan ? <span className="text-black/55"> — {p.catatan}</span> : null}
-                              </span>
-                              <span className="text-black/55">
-                                {p.tanggalLabel} · {p.oleh}
-                              </span>
-                            </div>
+                            <HonorPaymentRow
+                              key={p.id}
+                              stageId={stage.id}
+                              paymentId={p.id}
+                              jumlahRaw={p.jumlahRaw}
+                              jumlahLabel={p.jumlahLabel}
+                              catatan={p.catatan}
+                              oleh={p.oleh}
+                              tanggalLabel={p.tanggalLabel}
+                              editAction={editHonorPaymentAction}
+                              deleteAction={deleteHonorPaymentAction}
+                              editable={stage.canEditCosts}
+                            />
                           ))}
                         </div>
                       </details>
@@ -368,44 +376,25 @@ export default async function OrderDetailPage({
                   </div>
                 ) : null}
 
-                {stage.canEditCosts && (stage.materialCostLabel || stage.showShippingExtra) ? (
-                  <div className="flex flex-wrap gap-3 rounded-lg bg-black/[0.03] p-2.5 text-xs">
-                    {stage.materialCostLabel ? (
-                      <span>
-                        {stage.materialCostLabel}: <strong>{stage.materialCostDisplay}</strong>
-                      </span>
-                    ) : null}
-                    {stage.showShippingExtra ? (
-                      <>
-                        <span>
-                          Harga Shipping: <strong>{stage.shippingCostDisplay}</strong>
-                        </span>
-                        <span>
-                          Extra Cost: <strong>{stage.extraCostDisplay}</strong>
-                        </span>
-                      </>
-                    ) : null}
-                  </div>
-                ) : null}
-
                 {stage.canEditCosts ? (
-                  <details className="rounded-lg border border-black/10 bg-black/[0.02] px-3 py-2">
-                    <summary className="cursor-pointer text-xs font-semibold text-black/60">
-                      Edit Honor &amp; Harga Modal (admin)
-                    </summary>
-                    <form action={updateStageCostAction} className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
+                  <div className="flex flex-col gap-2 rounded-lg border border-black/10 bg-black/[0.02] px-3 py-2.5">
+                    <div className="flex flex-wrap items-center justify-between gap-1.5">
+                      <span className="text-xs font-semibold text-black/70">Honor &amp; Harga Modal (admin)</span>
+                      <span className="flex items-center gap-1.5 text-[10.5px] text-black/45">
+                        <span className="h-1.5 w-1.5 rounded-full bg-[oklch(0.6_0.09_142)]" />
+                        Bisa diubah kapan saja, termasuk saat tahap berjalan
+                      </span>
+                    </div>
+                    <form action={updateStageCostAction} className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                       <input type="hidden" name="stageId" value={stage.id} />
-                      <label className="flex flex-col gap-1 text-[11px] font-medium text-black/60">
-                        Honor Vendor (Rp)
-                        <input
-                          name="honorJumlah"
-                          type="number"
-                          min={0}
-                          step={1000}
-                          defaultValue={stage.honorJumlahRaw}
-                          className="rounded-md border border-black/15 px-2.5 py-1.5 text-xs font-normal text-black outline-none focus:border-[var(--brand-blue)]"
-                        />
-                      </label>
+                      <HonorModeField
+                        fieldNames={{ mode: 'honorMode', rate: 'honorRate', total: 'honorJumlah' }}
+                        initialMode={stage.honorMode}
+                        initialRate={stage.honorRateRaw}
+                        initialTotal={stage.honorJumlahRaw}
+                        qty={detail.order.jumlah}
+                        compact
+                      />
                       {stage.materialCostLabel ? (
                         <label className="flex flex-col gap-1 text-[11px] font-medium text-black/60">
                           {stage.materialCostLabel} (Rp)
@@ -415,7 +404,7 @@ export default async function OrderDetailPage({
                             min={0}
                             step={1000}
                             defaultValue={stage.materialCostRaw}
-                            className="rounded-md border border-black/15 px-2.5 py-1.5 text-xs font-normal text-black outline-none focus:border-[var(--brand-blue)]"
+                            className="rounded-md border border-black/15 bg-white px-2.5 py-1.5 text-xs font-normal text-black outline-none focus:border-[var(--brand-blue)]"
                           />
                         </label>
                       ) : null}
@@ -429,7 +418,7 @@ export default async function OrderDetailPage({
                               min={0}
                               step={1000}
                               defaultValue={stage.shippingCostRaw}
-                              className="rounded-md border border-black/15 px-2.5 py-1.5 text-xs font-normal text-black outline-none focus:border-[var(--brand-blue)]"
+                              className="rounded-md border border-black/15 bg-white px-2.5 py-1.5 text-xs font-normal text-black outline-none focus:border-[var(--brand-blue)]"
                             />
                           </label>
                           <label className="flex flex-col gap-1 text-[11px] font-medium text-black/60">
@@ -440,19 +429,19 @@ export default async function OrderDetailPage({
                               min={0}
                               step={1000}
                               defaultValue={stage.extraCostRaw}
-                              className="rounded-md border border-black/15 px-2.5 py-1.5 text-xs font-normal text-black outline-none focus:border-[var(--brand-blue)]"
+                              className="rounded-md border border-black/15 bg-white px-2.5 py-1.5 text-xs font-normal text-black outline-none focus:border-[var(--brand-blue)]"
                             />
                           </label>
                         </>
                       ) : null}
-                      <button
-                        type="submit"
-                        className="w-fit rounded-md bg-[var(--brand-blue)] px-3 py-1.5 text-xs font-semibold text-white sm:col-span-2"
+                      <SubmitButton
+                        pendingText="Menyimpan…"
+                        className="w-fit rounded-md bg-[var(--brand-blue)] px-3.5 py-1.5 text-xs font-semibold text-white sm:col-span-2"
                       >
-                        Simpan
-                      </button>
+                        Simpan Perubahan
+                      </SubmitButton>
                     </form>
-                  </details>
+                  </div>
                 ) : null}
 
                 {stage.notes.map((n) => (

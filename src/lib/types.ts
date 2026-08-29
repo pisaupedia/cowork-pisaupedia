@@ -60,6 +60,11 @@ export interface StageRow {
   urutan: number;
   vendor_id: string | null;
   status: StageStatus;
+  /** 'BORONGAN' (total langsung) atau 'PER_UNIT' (honor_rate × jumlah pesanan)
+   * — lihat catatan lengkap di schema.sql. */
+  honor_mode: 'BORONGAN' | 'PER_UNIT';
+  /** Tarif per pcs — hanya dipakai/berarti saat honor_mode = 'PER_UNIT'. */
+  honor_rate: number;
   honor_jumlah: number;
   /** Nominal yang sudah dibayarkan ke vendor untuk tahap ini — bisa dicicil/DP,
    * lihat recordHonorPayment di src/lib/repo/stages.ts. */

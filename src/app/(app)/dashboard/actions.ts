@@ -8,6 +8,7 @@ import { DELETE_CONFIRM_CODE } from '@/lib/constants';
 import { uploadsDir } from '@/lib/db';
 import { getOrderById, deleteOrder } from '@/lib/repo/orders';
 import { listStagesForOrder } from '@/lib/repo/stages';
+import { setFlash } from '@/lib/flash';
 
 /**
  * Admin/owner menghapus satu pesanan secara permanen dari daftar "Perlu
@@ -22,11 +23,17 @@ export async function deleteOrderAction(formData: FormData): Promise<void> {
   await requireAdmin();
 
   const confirmCode = String(formData.get('confirmCode') ?? '');
-  if (confirmCode !== DELETE_CONFIRM_CODE) throw new Error('Kode konfirmasi hapus salah.');
+  if (confirmCode !== DELETE_CONFIRM_CODE) {
+    await setFlash('error', 'Kode konfirmasi hapus salah.');
+    return;
+  }
 
   const orderId = String(formData.get('orderId') ?? '');
   const order = getOrderById(orderId);
-  if (!order) throw new Error('Pesanan tidak ditemukan.');
+  if (!order) {
+    await setFlash('error', 'Pesanan tidak ditemukan.');
+    return;
+  }
 
   // Ambil dulu daftar stage ID-nya sebelum baris-baris di database dihapus,
   // supaya folder upload per tahap (uploads/<stageId>/) masih bisa ditemukan.

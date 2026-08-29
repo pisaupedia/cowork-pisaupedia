@@ -5,15 +5,22 @@ import { redirect } from 'next/navigation';
 import { requireAdmin } from '@/lib/session';
 import { deleteDocument } from '@/lib/repo/documents';
 import { DELETE_CONFIRM_CODE } from '@/lib/constants';
+import { setFlash } from '@/lib/flash';
 
 export async function deleteDocumentAction(formData: FormData): Promise<void> {
   await requireAdmin();
   // Kode konfirmasi hapus (lihat ConfirmDeleteButton) divalidasi ulang di
   // sini supaya tidak bisa dilewati hanya dengan menonaktifkan JavaScript.
   const confirmCode = String(formData.get('confirmCode') ?? '');
-  if (confirmCode !== DELETE_CONFIRM_CODE) throw new Error('Kode konfirmasi hapus salah.');
+  if (confirmCode !== DELETE_CONFIRM_CODE) {
+    await setFlash('error', 'Kode konfirmasi hapus salah.');
+    return;
+  }
   const id = String(formData.get('id') ?? '');
-  if (!id) throw new Error('ID dokumen tidak valid.');
+  if (!id) {
+    await setFlash('error', 'ID dokumen tidak valid.');
+    return;
+  }
   deleteDocument(id);
   revalidatePath('/invoices');
   // Redirect selalu ke daftar dokumen — baik tombol Delete ini dipanggil

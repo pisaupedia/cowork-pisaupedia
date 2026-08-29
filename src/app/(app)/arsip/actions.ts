@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { requireAdmin } from '@/lib/session';
 import { getOrderById, archiveOrder, unarchiveOrder } from '@/lib/repo/orders';
 import { listStagesForOrder } from '@/lib/repo/stages';
+import { setFlash } from '@/lib/flash';
 
 function revalidateAfterArchiveChange(orderId: string) {
   revalidatePath('/dashboard');
@@ -23,12 +24,16 @@ export async function archiveOrderAction(formData: FormData): Promise<void> {
   const orderId = String(formData.get('orderId') ?? '');
 
   const order = getOrderById(orderId);
-  if (!order) throw new Error('Pesanan tidak ditemukan.');
+  if (!order) {
+    await setFlash('error', 'Pesanan tidak ditemukan.');
+    return;
+  }
 
   const stages = listStagesForOrder(orderId);
   const isFullyComplete = stages.length > 0 && stages.every((s) => s.status === 'SELESAI');
   if (!isFullyComplete) {
-    throw new Error('Hanya pesanan yang seluruh tahapnya sudah selesai yang bisa diarsipkan.');
+    await setFlash('error', 'Hanya pesanan yang seluruh tahapnya sudah selesai yang bisa diarsipkan.');
+    return;
   }
 
   archiveOrder(orderId);
@@ -42,7 +47,10 @@ export async function unarchiveOrderAction(formData: FormData): Promise<void> {
   const orderId = String(formData.get('orderId') ?? '');
 
   const order = getOrderById(orderId);
-  if (!order) throw new Error('Pesanan tidak ditemukan.');
+  if (!order) {
+    await setFlash('error', 'Pesanan tidak ditemukan.');
+    return;
+  }
 
   unarchiveOrder(orderId);
   revalidateAfterArchiveChange(orderId);

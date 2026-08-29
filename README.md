@@ -587,6 +587,180 @@ otomatis menghapus akun login-nya juga. Diperbaiki:
 Kode: `src/app/(app)/vendors/page.tsx`, `src/app/(app)/vendors/actions.ts`
 (fungsi `deleteUserAction` dihapus, tidak dipakai lagi di mana pun).
 
+### Pembaruan susulan (27 Agustus 2026) — Honor & Harga Modal selalu bisa diedit langsung
+
+Admin sebenarnya sudah selalu bisa mengubah Honor Vendor & Harga Modal
+kapan saja (tidak ada kuncian berdasarkan status tahap `BERJALAN`/`SELESAI`
+di `updateStageCostAction`/`updateStageCosts`) — tapi form edit-nya
+sebelumnya disembunyikan di balik `<details>` kecil berlabel "Edit Honor &
+Harga Modal (admin)" di bagian paling bawah kartu tahap, setelah beberapa
+panel lain (ganti vendor, upload foto, catat pembayaran), jadi terasa
+seperti terkunci padahal cuma sulit ditemukan.
+
+Diperbaiki — rancangan ditinjau lebih dulu lewat mockup (dua opsi
+dibandingkan) sebelum diimplementasikan, admin memilih Opsi A:
+
+- `<details>` yang harus diklik-buka dihapus. Kolom "Honor Vendor (Rp)"
+  dan harga modal/shipping/extra sekarang **langsung tampil sebagai
+  input**, tidak perlu dibuka dulu.
+- Baris ringkasan `readonly` yang sebelumnya menampilkan angka yang sama
+  di atas form (duplikat) dihapus — nilainya sekarang cukup terlihat dari
+  isi input itu sendiri.
+- Ditambahkan keterangan kecil "Bisa diubah kapan saja, termasuk saat
+  tahap berjalan" di header panel supaya jelas ini tidak terkunci oleh
+  status tahap.
+- Tombol submit diganti jadi `SubmitButton` (state "Menyimpan…" saat
+  proses) untuk konsistensi dengan form lain di halaman yang sama.
+
+Murni perubahan tampilan — nama field, validasi, dan `updateStageCostAction`
+di `src/app/(app)/orders/[id]/actions.ts` semuanya tidak berubah. Kode:
+`src/app/(app)/orders/[id]/page.tsx`.
+
+### Pembaruan susulan (27 Agustus 2026) — Edit &amp; hapus riwayat pembayaran honor
+
+Menambah pembayaran (DP/cicilan) sudah bisa kapan saja sejak awal (form
+"Catat Pembayaran" tidak pernah dikunci status tahap) — tapi mengoreksi
+nominal yang SUDAH tercatat (misalnya salah ketik) belum ada fiturnya sama
+sekali. Ditambahkan:
+
+- Tiap baris di "Riwayat Pembayaran" sekarang punya ikon ✎ (edit) &amp; 🗑
+  (hapus), admin-only (`stage.canEditCosts`) — vendor tetap melihat riwayat
+  seperti biasa tapi tanpa kontrol ini.
+- ✎ membuka form isian nominal + catatan di tempat (tombol Simpan/Batal
+  eksplisit, bukan auto-save, konsisten dengan panel Honor & Harga Modal).
+- 🗑 memakai `ConfirmDeleteButton` (kode konfirmasi) yang sama dengan tombol
+  hapus lain di aplikasi ini.
+- Setelah edit/hapus, `order_stages.honor_dibayar` &amp; `honor_status`
+  disinkronkan ulang dari SUM seluruh baris `honor_payments` milik tahap itu
+  (lihat `updateHonorPayment`/`deleteHonorPayment` di
+  `src/lib/repo/stages.ts`) — invarian "SUM(honor_payments.jumlah) ===
+  honor_dibayar" (lihat catatan di `schema.sql`) tetap terjaga.
+- Edit ditolak (tidak diterapkan) kalau nominal baru membuat total
+  pembayaran tahap melebihi honor total tahap tersebut, supaya tidak pernah
+  "kelebihan bayar" secara diam-diam — lihat `editHonorPaymentAction` di
+  `src/app/(app)/orders/[id]/actions.ts`.
+
+Kode baru: `src/components/honor-payment-row.tsx`. Diuji end-to-end
+(catat → edit → coba lebihi batas & ditolak → hapus → total ikut menyusut)
+dengan Playwright di atas build production.
+
+### Pembaruan susulan (27 Agustus 2026) — Pesan error validasi diperbaiki di seluruh aplikasi (production)
+
+Saat menguji fitur edit/hapus pembayaran di atas, ditemukan bug lama yang
+sebetulnya sudah ada sejak awal, bukan hal baru dari perubahan ini: di build
+production (`npm run build && npm run start`), setiap pesan error Server
+Action yang ditulis dengan `throw new Error('...')` di seluruh aplikasi ini
+— termasuk yang sudah lama ada, misalnya `createVendorAction`'s "Username
+sudah dipakai." — tidak tampil sebagai pesan Bahasa Indonesia yang ramah,
+melainkan layar generik "Minified React error #441". Ini perilaku default
+Next.js yang menyamarkan pesan error Server Action di production untuk
+keamanan (dijelaskan di `node_modules/next/dist/docs/01-app/01-getting-started/10-error-handling.md`
+versi Next.js ini: error yang "diharapkan"/validasi mestinya dikembalikan
+sebagai nilai balik, bukan di-`throw`), dan hanya kelihatan di `next start`,
+bukan di `next dev` — makanya luput selama ini.
+
+Sudah diperbaiki di seluruh aplikasi (9 file `actions.ts`, 83 titik
+`throw new Error(...)`), tanpa refactor besar-besaran (`useActionState`)
+yang berisiko tinggi — cukup memakai ulang infrastruktur flash/Toast yang
+memang sudah ada dan sudah mendukung `kind: 'error'` (lihat `src/lib/
+flash.ts` &amp; `src/components/toast.tsx`), jadi tidak ada perubahan
+tampilan sama sekali. Pola sebelum → sesudah:
+
+```ts
+// sebelum
+if (!alasan) throw new Error('Alasan penolakan wajib diisi.');
+
+// sesudah
+if (!alasan) {
+  await setFlash('error', 'Alasan penolakan wajib diisi.');
+  return;
+}
+```
+
+Diuji ulang di atas build production segar (`npm run build && npm run
+start`) untuk tiga jalur validasi berbeda (username vendor duplikat, deadline
+sebelum tanggal masuk, alasan penolakan kosong) — ketiganya sekarang
+menampilkan toast merah dengan pesan Bahasa Indonesia yang jelas, bukan
+layar crash generik, dan data tetap tidak berubah saat validasi ditolak.
+
+### Pembaruan susulan (27 Agustus 2026) — Perlu Perhatian: tab "Sedang Berjalan" + edit Honor & Modal langsung dari kartu
+
+Permintaan: di panel "Perlu Perhatian" (Dashboard), tampilkan semua
+pekerjaan yang sedang berjalan, dan admin bisa langsung mengedit honor jasa
+&amp; harga modal bahan dari panel itu — tanpa perlu masuk dulu ke halaman
+detail pesanan. Rancangan ditinjau lebih dulu lewat mockup (Babak 3 di
+mockup Honor &amp; Modal yang sama) sebelum diimplementasikan, admin memilih
+Opsi A (tombol "Edit Honor &amp; Modal" yang membuka kolom isian di tempat).
+
+- Ditambahkan tab "Semua Aktif / Sedang Berjalan" di atas daftar Perlu
+  Perhatian — tab kedua menyaring TAMPILAN ke pesanan yang tahap
+  sekarangnya berstatus `BERJALAN` saja (bukan `MENUNGGU` giliran tahap
+  sebelumnya). Ini murni penyaring tampilan, bukan hak edit — honor &amp;
+  harga modal tetap bisa diubah kapan saja di kedua tab, konsisten dengan
+  aturan yang sudah ada di `updateStageCostAction`.
+- Tiap kartu kini punya pill kecil "Berjalan"/"Menunggu" di sebelah badge
+  deadline (lihat prop baru `stagePill` di `OrderCard`), supaya status
+  tahap kelihatan sekilas tanpa harus membuka kartu.
+- Admin-only (`card.canEditCosts`): tombol "✎ Edit Honor &amp; Modal" di
+  tiap kartu membuka form Honor Vendor + Harga Modal Material (kalau
+  relevan untuk divisi tahap itu) di tempat, dengan tombol Simpan/Batal
+  eksplisit — kolaps secara default (beda dari panel di halaman detail
+  yang selalu terbuka) karena daftar ini bisa memuat banyak kartu sekaligus.
+  Kode baru: `src/components/stage-cost-quick-edit.tsx`.
+- Tidak ada Server Action baru — form ini memakai ulang
+  `updateStageCostAction` yang sama persis dengan panel "Honor &amp; Harga
+  Modal (admin)" di halaman detail pesanan (termasuk validasi, audit log,
+  dan `revalidatePath('/dashboard')`-nya yang memang sudah ada), jadi
+  tempat form-nya saja yang baru.
+
+Diuji end-to-end dengan Playwright di atas build production: tab
+menyaring dengan benar, field Harga Modal Material cuma muncul untuk
+divisi yang relevan (Cutting &amp; Blacksmith / Handle &amp; Cover), nilai
+tersimpan &amp; toast sukses tampil tanpa crash, dan akun vendor dipastikan
+tidak pernah melihat tombol edit ini sama sekali.
+
+### Pembaruan susulan (28 Agustus 2026) — Honor Vendor: mode Borongan atau Per Unit/Pcs
+
+Permintaan: honor ke vendor perlu mendukung dua kondisi — borongan/lumpsum
+(satu angka total) dan per unit/pcs (tarif per potong × jumlah pesanan).
+Rancangan ditinjau lebih dulu lewat mockup (Babak 4, mockup Honor &amp; Modal
+yang sama) sebelum diimplementasikan.
+
+- Setiap kolom Honor Vendor (di form Buat Pesanan Baru per divisi, panel
+  Honor &amp; Harga Modal di halaman detail, dan edit cepat di Dashboard)
+  kini punya toggle "Borongan" / "Per Unit". Borongan: satu angka total
+  seperti sebelumnya. Per Unit: admin mengisi harga per pcs, totalnya
+  dihitung &amp; ditampilkan otomatis (`tarif × jumlah pesanan`) — komponen
+  baru `src/components/honor-mode-field.tsx`, dipakai di ketiga tempat
+  tersebut supaya konsisten.
+- Total yang benar-benar tersimpan **selalu dihitung ulang di server**
+  (bukan dipercaya dari field tersembunyi hasil hitungan JavaScript di
+  browser) — supaya tetap benar walau JavaScript nonaktif atau field itu
+  disunting manual lewat devtools.
+- Data model: dua kolom baru di `order_stages` — `honor_mode`
+  (`'BORONGAN'`/`'PER_UNIT'`) &amp; `honor_rate` (tarif per pcs, 0 untuk
+  Borongan). `honor_jumlah` (total) tetap satu-satunya kolom yang dipakai
+  di semua perhitungan lain (`computeHargaModal`, laporan, status
+  lunas/DP, dst.) — jadi tidak ada bagian lain di aplikasi yang perlu tahu
+  soal mode/tarif sama sekali. Migrasi kolom otomatis untuk database lama,
+  lihat `migrate()` di `src/lib/db.ts`.
+- **Keputusan yang disepakati**: kalau jumlah pesanan diedit belakangan
+  (lewat halaman Edit Pesanan) setelah honor Per Unit diisi, admin memilih
+  Opsi 1 — total honor tahap bermode Per Unit **dihitung ulang otomatis**
+  (tarif tetap, total baru = tarif × jumlah baru), bukan dibekukan. Setiap
+  tahap yang berubah dicatat ke audit log, dan pesan sukses di halaman
+  detail pesanan menyebutkan berapa tahap yang ikut disesuaikan, supaya
+  perubahan nominal honor ini tidak lewat tanpa disadari admin — lihat
+  `recalcPerUnitHonorForOrder` di `src/lib/repo/stages.ts` &amp;
+  pemanggilnya di `updateOrderAction`.
+
+Diuji end-to-end dengan Playwright di atas build production: pesanan baru
+dengan honor Per Unit (250rb/pcs × 4 unit) tersimpan dengan total yang
+benar; mengedit jumlah pesanan (4 → 10 unit) memicu penghitungan ulang
+otomatis (total ikut naik jadi 2.500.000, tercatat ke audit log, pesan
+sukses tampil); dan mode Borongan pada tahap lain yang tidak disentuh
+tetap bekerja seperti sebelumnya (regresi aman).
+
 ## Status hosting/deployment
 
 Aplikasi ini saat ini disiapkan untuk **dijalankan secara lokal** (`npm run

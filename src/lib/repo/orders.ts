@@ -34,8 +34,16 @@ export interface CreateOrderInput {
   catatan?: string | null;
   /** vendorId per divisi; a divisi with no vendor assigned yet is allowed (null) */
   vendorPerDivisi: Partial<Record<Divisi, string | null>>;
-  /** Honor vendor per divisi, diinput manual oleh admin (bukan dihitung otomatis). Default 0. */
+  /** Honor vendor per divisi — TOTAL yang sudah diresolusi (untuk Borongan:
+   * diketik langsung; untuk Per Unit: sudah dikalikan honorRatePerDivisi ×
+   * jumlah oleh pemanggil, lihat createOrderAction). Default 0. */
   honorPerDivisi?: Partial<Record<Divisi, number>>;
+  /** Mode honor per divisi — 'BORONGAN' (default) atau 'PER_UNIT'. */
+  honorModePerDivisi?: Partial<Record<Divisi, 'BORONGAN' | 'PER_UNIT'>>;
+  /** Tarif per pcs per divisi — hanya berarti untuk divisi bermode 'PER_UNIT',
+   * disimpan supaya bisa dihitung ulang otomatis kalau jumlah pesanan diedit
+   * belakangan (lihat recalcPerUnitHonorForOrder). */
+  honorRatePerDivisi?: Partial<Record<Divisi, number>>;
   /** Komponen harga modal, diinput manual oleh admin — lihat catatan di schema.sql. Default 0. */
   materialCostBaja?: number; // Cutting & Blacksmith
   materialCostKayu?: number; // Handle & Cover
@@ -86,6 +94,8 @@ export function createOrder(input: CreateOrderInput): OrderRow {
     DIVISIONS.forEach((divisi, urutan) => {
       const vendorId = input.vendorPerDivisi[divisi] ?? null;
       const honorJumlah = Math.max(0, Math.round(input.honorPerDivisi?.[divisi] ?? 0));
+      const honorMode = input.honorModePerDivisi?.[divisi] ?? 'BORONGAN';
+      const honorRate = Math.max(0, Math.round(input.honorRatePerDivisi?.[divisi] ?? 0));
       const materialCost =
         divisi === 'Cutting & Blacksmith'
           ? Math.max(0, Math.round(input.materialCostBaja ?? 0))
@@ -97,9 +107,22 @@ export function createOrder(input: CreateOrderInput): OrderRow {
       const status = urutan === 0 && approvalStatus === 'DISETUJUI' ? 'BERJALAN' : 'MENUNGGU';
       const stageId = newId();
       db.prepare(
-        `INSERT INTO order_stages (id, order_id, divisi, urutan, vendor_id, status, honor_jumlah, material_cost, shipping_cost, extra_cost)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-      ).run(stageId, id, divisi, urutan, vendorId, status, honorJumlah, materialCost, shippingCost, extraCost);
+        `INSERT INTO order_stages (id, order_id, divisi, urutan, vendor_id, status, honor_jumlah, honor_mode, honor_rate, material_cost, shipping_cost, extra_cost)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      ).run(
+        stageId,
+        id,
+        divisi,
+        urutan,
+        vendorId,
+        status,
+        honorJumlah,
+        honorMode,
+        honorRate,
+        materialCost,
+        shippingCost,
+        extraCost
+      );
     });
     db.exec('COMMIT');
   } catch (err) {

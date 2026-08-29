@@ -32,7 +32,10 @@ export async function rejectOrderAction(formData: FormData): Promise<void> {
   const alasan = String(formData.get('alasan') ?? '').trim();
   const order = getOrderById(orderId);
   if (!order || order.approval_status !== 'MENUNGGU') return;
-  if (!alasan) throw new Error('Alasan penolakan wajib diisi.');
+  if (!alasan) {
+    await setFlash('error', 'Alasan penolakan wajib diisi.');
+    return;
+  }
 
   setApprovalStatus(orderId, 'DITOLAK', alasan);
   logAudit({ entityType: 'approval', entityId: orderId, action: 'tolak', detail: alasan, oleh: user.name });
@@ -48,8 +51,14 @@ export async function resubmitOrderAction(formData: FormData): Promise<void> {
   const orderId = String(formData.get('orderId') ?? '');
   const approvalNote = String(formData.get('approvalNote') ?? '').trim() || null;
   const order = getOrderById(orderId);
-  if (!order) throw new Error('Pesanan tidak ditemukan.');
-  if (order.approval_status !== 'DITOLAK') throw new Error('Hanya pesanan yang ditolak yang bisa diajukan ulang.');
+  if (!order) {
+    await setFlash('error', 'Pesanan tidak ditemukan.');
+    return;
+  }
+  if (order.approval_status !== 'DITOLAK') {
+    await setFlash('error', 'Hanya pesanan yang ditolak yang bisa diajukan ulang.');
+    return;
+  }
 
   resubmitOrder(orderId, approvalNote);
   logAudit({ entityType: 'approval', entityId: orderId, action: 'ajukan_ulang', oleh: user.name });

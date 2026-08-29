@@ -5,6 +5,7 @@ import { revalidatePath } from 'next/cache';
 import { requireAdmin } from '@/lib/session';
 import { getDocumentById, updateDocument, type DocumentItemInput } from '@/lib/repo/documents';
 import type { CurrencyCode } from '@/lib/types';
+import { setFlash } from '@/lib/flash';
 
 function parseItems(raw: string): DocumentItemInput[] {
   let parsed: unknown[];
@@ -34,14 +35,32 @@ export async function updateDocumentAction(formData: FormData): Promise<void> {
 
   const id = String(formData.get('id') ?? '');
   const existing = getDocumentById(id);
-  if (!existing) throw new Error('Dokumen tidak ditemukan.');
+  if (!existing) {
+    await setFlash('error', 'Dokumen tidak ditemukan.');
+    return;
+  }
 
   const type = existing.type;
   const tanggal = String(formData.get('tanggal') ?? '');
-  if (!tanggal) throw new Error('Tanggal wajib diisi.');
+  if (!tanggal) {
+    await setFlash('error', 'Tanggal wajib diisi.');
+    return;
+  }
 
-  const items = parseItems(String(formData.get('itemsJson') ?? '[]'));
-  if (items.length === 0) throw new Error('Minimal satu item harus diisi.');
+  // parseItems melempar Error kalau JSON item rusak/tidak valid — ditangkap
+  // di sini (bukan di dalam parseItems sendiri) supaya pesan errornya tetap
+  // bisa ditampilkan lewat flash message, bukan layar error teknis.
+  let items: DocumentItemInput[];
+  try {
+    items = parseItems(String(formData.get('itemsJson') ?? '[]'));
+  } catch (err) {
+    await setFlash('error', err instanceof Error ? err.message : 'Data item tidak valid.');
+    return;
+  }
+  if (items.length === 0) {
+    await setFlash('error', 'Minimal satu item harus diisi.');
+    return;
+  }
 
   updateDocument(id, {
     type,

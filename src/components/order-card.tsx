@@ -8,6 +8,8 @@ export function OrderCard({
   archiveAction,
   deleteAction,
   from,
+  stagePill,
+  costEditor,
 }: {
   card: OrderCardView;
   showProgress?: boolean;
@@ -28,6 +30,16 @@ export function OrderCard({
    * Perhatian" di Dashboard, admin-only) — vendor tidak pernah melihat
    * tombol ini karena halamannya tidak meneruskan prop ini sama sekali. */
   deleteAction?: (formData: FormData) => Promise<void>;
+  /** Pill kecil di sebelah kiri badge deadline, menandai status tahap yang
+   * sedang berjalan/berikutnya ("Berjalan"/"Menunggu") — dipakai di panel
+   * Perlu Perhatian Dashboard supaya bisa dibedakan sekilas dari kartu yang
+   * masih menunggu tahap sebelumnya. Opsional; kartu di kanban/kalender
+   * tidak memakainya karena kolomnya sendiri sudah menunjukkan divisi. */
+  stagePill?: { label: string; tone: 'berjalan' | 'menunggu' };
+  /** Konten tambahan (form edit honor & harga modal langsung di kartu, lihat
+   * StageCostQuickEdit) yang dirender di bawah info utama, sebelum baris
+   * tombol arsipkan/hapus. Opsional — hanya dipakai dari Dashboard admin. */
+  costEditor?: React.ReactNode;
 }) {
   return (
     <div className="flex flex-col gap-2 rounded-xl border border-black/10 bg-white p-3 transition hover:border-[var(--brand-blue)] hover:shadow-sm">
@@ -50,11 +62,25 @@ export function OrderCard({
         <div className="flex min-w-0 flex-1 flex-col gap-2">
           <div className="flex items-center justify-between gap-2">
             <span className="font-heading text-sm font-semibold">{card.kode}</span>
-            <span
-              className="flex-shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold"
-              style={{ background: card.badgeBg, color: card.badgeFg }}
-            >
-              {card.badgeLabel}
+            <span className="flex flex-shrink-0 items-center gap-1.5">
+              {stagePill ? (
+                <span
+                  className={
+                    'rounded-full px-2 py-0.5 text-[10.5px] font-semibold ' +
+                    (stagePill.tone === 'berjalan'
+                      ? 'bg-[var(--brand-blue)]/10 text-[var(--brand-blue)]'
+                      : 'bg-black/[0.06] text-black/45')
+                  }
+                >
+                  {stagePill.label}
+                </span>
+              ) : null}
+              <span
+                className="rounded-full px-2 py-0.5 text-[11px] font-semibold"
+                style={{ background: card.badgeBg, color: card.badgeFg }}
+              >
+                {card.badgeLabel}
+              </span>
             </span>
           </div>
           <div className="text-xs text-black/55">{card.subtitle}</div>
@@ -66,6 +92,7 @@ export function OrderCard({
           <div className="text-[11px] text-black/55">{card.vendorTag}</div>
         </div>
       </Link>
+      {costEditor}
       {archiveAction || deleteAction ? (
         <div className="flex items-center justify-end gap-2">
           {archiveAction ? (

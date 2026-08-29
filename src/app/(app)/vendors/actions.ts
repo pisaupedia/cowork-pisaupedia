@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache';
 import { requireAdmin } from '@/lib/session';
 import { DELETE_CONFIRM_CODE } from '@/lib/constants';
+import { setFlash } from '@/lib/flash';
 import {
   createVendor,
   countStagesForVendor,
@@ -28,10 +29,12 @@ export async function createVendorAction(formData: FormData): Promise<void> {
   const password = String(formData.get('password') ?? '');
 
   if (!nama || !username || password.length < 6) {
-    throw new Error('Nama vendor, username, dan password (min. 6 karakter) wajib diisi.');
+    await setFlash('error', 'Nama vendor, username, dan password (min. 6 karakter) wajib diisi.');
+    return;
   }
   if (getUserByUsername(username)) {
-    throw new Error('Username sudah dipakai.');
+    await setFlash('error', 'Username sudah dipakai.');
+    return;
   }
 
   const vendor = createVendor(nama, kontak, false);
@@ -51,12 +54,14 @@ export async function resetVendorPasswordAction(formData: FormData): Promise<voi
   const newPassword = String(formData.get('newPassword') ?? '');
 
   if (newPassword.length < 6) {
-    throw new Error('Password baru minimal 6 karakter.');
+    await setFlash('error', 'Password baru minimal 6 karakter.');
+    return;
   }
 
   const user = getUserById(userId);
   if (!user || user.role !== 'VENDOR') {
-    throw new Error('Akun vendor tidak ditemukan.');
+    await setFlash('error', 'Akun vendor tidak ditemukan.');
+    return;
   }
 
   setPassword(userId, newPassword);
@@ -83,8 +88,14 @@ export async function updateVendorAction(formData: FormData): Promise<void> {
   const nama = String(formData.get('nama') ?? '').trim();
   const kontak = String(formData.get('kontak') ?? '').trim() || null;
 
-  if (!id || !getVendorById(id)) throw new Error('Vendor tidak ditemukan.');
-  if (!nama) throw new Error('Nama vendor / akun wajib diisi.');
+  if (!id || !getVendorById(id)) {
+    await setFlash('error', 'Vendor tidak ditemukan.');
+    return;
+  }
+  if (!nama) {
+    await setFlash('error', 'Nama vendor / akun wajib diisi.');
+    return;
+  }
 
   updateVendor(id, nama, kontak);
 
@@ -92,10 +103,19 @@ export async function updateVendorAction(formData: FormData): Promise<void> {
   if (userId) {
     const username = String(formData.get('username') ?? '').trim();
     const user = getUserById(userId);
-    if (!user || user.role !== 'VENDOR') throw new Error('Akun vendor tidak ditemukan.');
-    if (!username) throw new Error('Username wajib diisi.');
+    if (!user || user.role !== 'VENDOR') {
+      await setFlash('error', 'Akun vendor tidak ditemukan.');
+      return;
+    }
+    if (!username) {
+      await setFlash('error', 'Username wajib diisi.');
+      return;
+    }
     const existing = getUserByUsername(username);
-    if (existing && existing.id !== userId) throw new Error('Username sudah dipakai.');
+    if (existing && existing.id !== userId) {
+      await setFlash('error', 'Username sudah dipakai.');
+      return;
+    }
     // Nama akun disamakan dengan nama vendor (satu field, lihat catatan di atas).
     updateUser(userId, { username, name: nama });
   }
@@ -110,17 +130,25 @@ export async function deleteVendorAction(formData: FormData): Promise<void> {
   await requireAdmin();
 
   const confirmCode = String(formData.get('confirmCode') ?? '');
-  if (confirmCode !== DELETE_CONFIRM_CODE) throw new Error('Kode konfirmasi hapus salah.');
+  if (confirmCode !== DELETE_CONFIRM_CODE) {
+    await setFlash('error', 'Kode konfirmasi hapus salah.');
+    return;
+  }
 
   const id = String(formData.get('id') ?? '');
   const vendor = getVendorById(id);
-  if (!vendor) throw new Error('Vendor tidak ditemukan.');
+  if (!vendor) {
+    await setFlash('error', 'Vendor tidak ditemukan.');
+    return;
+  }
 
   const stageCount = countStagesForVendor(id);
   if (stageCount > 0) {
-    throw new Error(
+    await setFlash(
+      'error',
       `Vendor "${vendor.nama}" masih ditugaskan pada ${stageCount} tahap pesanan yang belum selesai. Selesaikan atau lepaskan dulu tugasnya sebelum menghapus vendor ini.`
     );
+    return;
   }
 
   deleteVendor(id);
@@ -144,9 +172,13 @@ export async function createAdminAction(formData: FormData): Promise<void> {
   const password = String(formData.get('password') ?? '');
 
   if (!name || !username || password.length < 6) {
-    throw new Error('Nama, username, dan password (min. 6 karakter) wajib diisi.');
+    await setFlash('error', 'Nama, username, dan password (min. 6 karakter) wajib diisi.');
+    return;
   }
-  if (getUserByUsername(username)) throw new Error('Username sudah dipakai.');
+  if (getUserByUsername(username)) {
+    await setFlash('error', 'Username sudah dipakai.');
+    return;
+  }
 
   createUser({ username, password, name, role: 'ADMIN', vendorId: null });
   revalidatePath('/vendors');
@@ -156,10 +188,16 @@ export async function resetAdminPasswordAction(formData: FormData): Promise<void
   await requireAdmin();
   const userId = String(formData.get('userId') ?? '');
   const newPassword = String(formData.get('newPassword') ?? '');
-  if (newPassword.length < 6) throw new Error('Password baru minimal 6 karakter.');
+  if (newPassword.length < 6) {
+    await setFlash('error', 'Password baru minimal 6 karakter.');
+    return;
+  }
 
   const user = getUserById(userId);
-  if (!user || user.role !== 'ADMIN') throw new Error('Akun admin tidak ditemukan.');
+  if (!user || user.role !== 'ADMIN') {
+    await setFlash('error', 'Akun admin tidak ditemukan.');
+    return;
+  }
 
   setPassword(userId, newPassword);
   revalidatePath('/vendors');
@@ -172,14 +210,21 @@ export async function deleteAdminAction(formData: FormData): Promise<void> {
   await requireAdmin();
 
   const confirmCode = String(formData.get('confirmCode') ?? '');
-  if (confirmCode !== DELETE_CONFIRM_CODE) throw new Error('Kode konfirmasi hapus salah.');
+  if (confirmCode !== DELETE_CONFIRM_CODE) {
+    await setFlash('error', 'Kode konfirmasi hapus salah.');
+    return;
+  }
 
   const id = String(formData.get('id') ?? '');
   const user = getUserById(id);
-  if (!user || user.role !== 'ADMIN') throw new Error('Akun admin tidak ditemukan.');
+  if (!user || user.role !== 'ADMIN') {
+    await setFlash('error', 'Akun admin tidak ditemukan.');
+    return;
+  }
 
   if (countAdmins() <= 1) {
-    throw new Error('Tidak bisa menghapus admin terakhir — aplikasi harus selalu punya minimal satu akun admin.');
+    await setFlash('error', 'Tidak bisa menghapus admin terakhir — aplikasi harus selalu punya minimal satu akun admin.');
+    return;
   }
 
   deleteUser(id);

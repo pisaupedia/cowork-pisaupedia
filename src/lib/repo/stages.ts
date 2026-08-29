@@ -72,8 +72,65 @@ export function recordHonorPayment(stageId: string, amount: number, catatan: str
   );
 }
 
+/** Admin mengoreksi nominal/catatan SATU baris riwayat pembayaran yang
+ * sudah tercatat (misalnya salah ketik) — bukan menambah baris baru.
+ * Validasi (nominal > 0, tidak melebihi honor_jumlah tahap) dilakukan di
+ * action layer (src/app/(app)/orders/[id]/actions.ts) sebelum memanggil
+ * ini, supaya pesan errornya bisa diformat dengan formatRupiah di sana.
+ * order_stages.honor_dibayar & honor_status disinkronkan ulang dari SUM
+ * seluruh baris honor_payments milik tahap ini setelahnya, supaya invarian
+ * SUM(honor_payments.jumlah) === honor_dibayar (lihat schema.sql) tetap
+ * terjaga. */
+export function updateHonorPayment(paymentId: string, jumlahBaru: number, catatan: string | null): void {
+  const payment = db.prepare('SELECT * FROM honor_payments WHERE id = ?').get(paymentId) as
+    | HonorPaymentRow
+    | undefined;
+  if (!payment) return;
+  const stage = getStageById(payment.stage_id);
+  if (!stage) return;
+
+  db.prepare('UPDATE honor_payments SET jumlah = ?, catatan = ? WHERE id = ?').run(jumlahBaru, catatan, paymentId);
+
+  const total = db
+    .prepare('SELECT COALESCE(SUM(jumlah), 0) AS total FROM honor_payments WHERE stage_id = ?')
+    .get(payment.stage_id) as { total: number };
+  const status = stage.honor_jumlah > 0 && total.total >= stage.honor_jumlah ? 'SUDAH' : 'BELUM';
+  db.prepare(
+    "UPDATE order_stages SET honor_dibayar = ?, honor_status = ?, updated_at = datetime('now') WHERE id = ?"
+  ).run(total.total, status, payment.stage_id);
+}
+
+/** Admin menghapus SATU baris riwayat pembayaran yang salah/tidak jadi
+ * (misalnya tercatat dua kali). order_stages.honor_dibayar & honor_status
+ * disinkronkan ulang dari SUM baris yang tersisa setelahnya. */
+export function deleteHonorPayment(paymentId: string): void {
+  const payment = db.prepare('SELECT * FROM honor_payments WHERE id = ?').get(paymentId) as
+    | HonorPaymentRow
+    | undefined;
+  if (!payment) return;
+  const stage = getStageById(payment.stage_id);
+
+  db.prepare('DELETE FROM honor_payments WHERE id = ?').run(paymentId);
+
+  const total = db
+    .prepare('SELECT COALESCE(SUM(jumlah), 0) AS total FROM honor_payments WHERE stage_id = ?')
+    .get(payment.stage_id) as { total: number };
+  const status = stage && stage.honor_jumlah > 0 && total.total >= stage.honor_jumlah ? 'SUDAH' : 'BELUM';
+  db.prepare(
+    "UPDATE order_stages SET honor_dibayar = ?, honor_status = ?, updated_at = datetime('now') WHERE id = ?"
+  ).run(total.total, status, payment.stage_id);
+}
+
 export interface StageCostInput {
   honorJumlah?: number;
+  /** 'BORONGAN' atau 'PER_UNIT' — kalau diisi, disimpan bersamaan dengan
+   * honorJumlah (yang sudah dihitung/divalidasi di action layer sebelum
+   * sampai di sini — lihat updateStageCostAction). */
+  honorMode?: 'BORONGAN' | 'PER_UNIT';
+  /** Tarif per pcs — hanya berarti kalau honorMode = 'PER_UNIT', tapi tetap
+   * disimpan apa adanya (0 untuk Borongan) supaya nilainya tidak hilang
+   * kalau admin bolak-balik ganti mode. */
+  honorRate?: number;
   materialCost?: number;
   shippingCost?: number;
   extraCost?: number;
@@ -83,6 +140,14 @@ export interface StageCostInput {
 export function updateStageCosts(stageId: string, input: StageCostInput): void {
   const sets: string[] = [];
   const params: (number | string)[] = [];
+  if (input.honorMode !== undefined) {
+    sets.push('honor_mode = ?');
+    params.push(input.honorMode);
+  }
+  if (input.honorRate !== undefined) {
+    sets.push('honor_rate = ?');
+    params.push(Math.max(0, Math.round(input.honorRate)));
+  }
   if (input.honorJumlah !== undefined) {
     const jumlah = Math.max(0, Math.round(input.honorJumlah));
     sets.push('honor_jumlah = ?');
@@ -113,6 +178,36 @@ export function updateStageCosts(stageId: string, input: StageCostInput): void {
   sets.push("updated_at = datetime('now')");
   params.push(stageId);
   db.prepare(`UPDATE order_stages SET ${sets.join(', ')} WHERE id = ?`).run(...params);
+}
+
+/** Dipanggil setiap kali jumlah unit pesanan berubah (lihat updateOrderAction
+ * di src/app/(app)/orders/[id]/actions.ts) — semua tahap yang honornya
+ * bermode 'PER_UNIT' dihitung ulang totalnya (honor_rate tetap, honor_jumlah
+ * = honor_rate * jumlah baru) supaya honor per-pcs selalu konsisten dengan
+ * jumlah pesanan terkini (Opsi 1 dari rancangan: hitung ulang otomatis, bukan
+ * dibekukan). Tahap Borongan tidak tersentuh sama sekali karena totalnya
+ * memang tidak bergantung jumlah. Sama seperti updateStageCosts: kalau total
+ * baru lebih kecil dari honor_dibayar yang sudah tercatat, honor_dibayar ikut
+ * diturunkan supaya tidak pernah melebihi total (honor_status disinkronkan).
+ * Mengembalikan daftar tahap yang totalnya benar-benar berubah, supaya
+ * pemanggil bisa memberi tahu admin & mencatatnya ke audit_log. */
+export function recalcPerUnitHonorForOrder(
+  orderId: string,
+  newJumlah: number
+): { stageId: string; divisi: string; before: number; after: number }[] {
+  const stages = listStagesForOrder(orderId).filter((s) => s.honor_mode === 'PER_UNIT');
+  const changed: { stageId: string; divisi: string; before: number; after: number }[] = [];
+  for (const s of stages) {
+    const newTotal = Math.max(0, Math.round(s.honor_rate * newJumlah));
+    if (newTotal === s.honor_jumlah) continue;
+    const dibayarBaru = Math.min(s.honor_dibayar, newTotal);
+    const status = newTotal > 0 && dibayarBaru >= newTotal ? 'SUDAH' : 'BELUM';
+    db.prepare(
+      "UPDATE order_stages SET honor_jumlah = ?, honor_dibayar = ?, honor_status = ?, updated_at = datetime('now') WHERE id = ?"
+    ).run(newTotal, dibayarBaru, status, s.id);
+    changed.push({ stageId: s.id, divisi: s.divisi, before: s.honor_jumlah, after: newTotal });
+  }
+  return changed;
 }
 
 /** Total harga modal pesanan: honor semua tahap + material + shipping + extra cost. */

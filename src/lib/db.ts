@@ -27,6 +27,12 @@ function migrate(database: DatabaseSync): void {
     ['material_cost', 'ALTER TABLE order_stages ADD COLUMN material_cost INTEGER NOT NULL DEFAULT 0'],
     ['shipping_cost', 'ALTER TABLE order_stages ADD COLUMN shipping_cost INTEGER NOT NULL DEFAULT 0'],
     ['extra_cost', 'ALTER TABLE order_stages ADD COLUMN extra_cost INTEGER NOT NULL DEFAULT 0'],
+    // honor_mode/honor_rate — dukungan honor "Per Unit" (tarif per pcs ×
+    // jumlah pesanan), selain "Borongan" (total langsung) yang sudah ada
+    // sejak awal. Database lama otomatis dianggap Borongan (honor_jumlah
+    // yang sudah tersimpan tidak berubah) — lihat catatan di schema.sql.
+    ['honor_mode', "ALTER TABLE order_stages ADD COLUMN honor_mode TEXT NOT NULL DEFAULT 'BORONGAN'"],
+    ['honor_rate', 'ALTER TABLE order_stages ADD COLUMN honor_rate INTEGER NOT NULL DEFAULT 0'],
   ] as const) {
     if (!existingStageCols.has(name)) database.exec(ddl);
   }
