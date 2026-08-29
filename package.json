@@ -5,13 +5,14 @@
   "engines": {
     "node": ">=22.5.0"
   },
-  "scripts": {
-    "dev": "next dev",
-    "build": "next build",
-    "start": "next start",
-    "lint": "eslint",
-    "db:reset": "node -e \"require('fs').rmSync('./data/pisau.db',{force:true})\""
-  },
+"scripts": {
+  "dev": "next dev -p 4500",
+  "build": "next build",
+  "start": "next start -p 4500",
+  "lint": "eslint",
+  "db:reset": "node -e \"require('fs').rmSync('./data/pisau.db',{force:true})\""
+},
+
   "dependencies": {
     "@types/bcryptjs": "^2.4.6",
     "bcryptjs": "^3.0.3",
