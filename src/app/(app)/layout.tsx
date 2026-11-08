@@ -32,11 +32,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       <aside className="flex flex-shrink-0 flex-col gap-4 bg-[oklch(0.22_0.015_255)] p-4 md:w-60 md:gap-6 md:p-6">
         <div className="flex items-center gap-2 md:flex-col md:items-start md:gap-1">
           <div className="flex items-center gap-2">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="oklch(0.6 0.19 15)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M14 3 3 14l3 3L17 6z" />
-              <path d="M17 6l3-3 1 1-3 3z" />
-              <path d="M6 17l-3 3" />
-            </svg>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/pisaupedia-logo.jpg" alt="Logo Pisaupedia" width={28} height={28} className="h-7 w-7 flex-shrink-0 rounded-full bg-white" />
             <span className="font-heading text-[15px] font-semibold text-white">Pisaupedia Knife Manufacture</span>
           </div>
           <span className="pl-8 text-[11px] text-white/50 md:pl-0">{COMPANY_NAME}</span>

@@ -16,12 +16,9 @@ export default async function LoginPage({
     <main className="min-h-screen flex items-center justify-center bg-[oklch(0.97_0.005_255)] px-4">
       <div className="w-full max-w-sm rounded-2xl border border-black/10 bg-white p-8 shadow-sm">
         <div className="mb-6 flex flex-col items-center gap-1 text-center">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/pisaupedia-logo.jpg" alt="Logo Pisaupedia" width={72} height={72} className="mb-2 h-[72px] w-[72px] rounded-full" />
           <div className="flex items-center gap-2">
-            <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="var(--brand-red)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M14 3 3 14l3 3L17 6z" />
-              <path d="M17 6l3-3 1 1-3 3z" />
-              <path d="M6 17l-3 3" />
-            </svg>
             <span className="font-heading text-lg font-semibold">Pisaupedia Knife Manufacture</span>
           </div>
           <span className="text-xs text-black/50">{COMPANY_NAME}</span>
